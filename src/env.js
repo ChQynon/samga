@@ -8,7 +8,7 @@ export const env = createEnv({
    */
   server: {
     NODE_ENV: z.enum(['development', 'test', 'production']),
-    RUNTIME: z.enum(['edge', 'nodejs']),
+    RUNTIME: z.enum(['edge', 'nodejs', 'node']).transform(val => val === 'node' ? 'nodejs' : val),
   },
 
   /**
