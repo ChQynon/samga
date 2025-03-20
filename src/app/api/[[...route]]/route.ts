@@ -11,7 +11,7 @@ import auth from '@/server/routers/auth'
 import bridge from '@/server/routers/bridge'
 import { env } from '@/env'
 
-export const runtime = 'node'
+export const runtime = 'nodejs'
 export const maxDuration = 30
 
 // Добавляем метаданные, чтобы favicon отображался и на API страницах

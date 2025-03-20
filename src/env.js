@@ -8,7 +8,7 @@ export const env = createEnv({
    */
   server: {
     NODE_ENV: z.enum(['development', 'test', 'production']),
-    RUNTIME: z.enum(['edge', 'node']),
+    RUNTIME: z.enum(['edge', 'nodejs']),
   },
 
   /**
