@@ -192,48 +192,64 @@ const NFCLogin = () => {
       let authData: AuthData;
       const qrText = data.text.trim();
       
-      // МАКСИМАЛЬНО УПРОЩЕННЫЙ АЛГОРИТМ:
-      // 1. Если строка содержит только цифры и буквы, считаем:
-      //    - первые 12 символов (или меньше) - это ИИН
-      //    - остальное - пароль
-      if (/^[a-zA-Z0-9]+$/.test(qrText)) {
-        // Простая строка без разделителей (новый формат)
-        authData = {
-          iin: qrText.substring(0, Math.min(12, qrText.length)), 
-          password: qrText.length > 12 ? qrText.substring(12) : 'defaultpass',
-          deviceId: `qr-simple-${Date.now()}`
-        };
-        console.log('Обработан простой формат без разделителей');
-      }
-      // 2. Проверяем известные разделители
-      else if (qrText.includes(':')) {
-        const parts = qrText.split(':');
-        authData = {
-          iin: parts[0] || '000000000000',
-          password: parts[1] || 'defaultpass',
-          deviceId: `qr-colon-${Date.now()}`
-        };
-      } 
-      else if (qrText.includes('|')) {
-        const parts = qrText.split('|');
-        authData = {
-          iin: parts[0] || '000000000000',
-          password: parts[1] || 'defaultpass',
-          deviceId: `qr-pipe-${Date.now()}`
-        };
-      }
-      // 3. Попытка JSON
-      else {
-        try {
-          authData = JSON.parse(qrText);
-        } catch {
-          // 4. Универсальный парсер - извлекаем цифры для ИИН
+      // Сначала пробуем разобрать как JSON (новый формат)
+      try {
+        const jsonData = JSON.parse(qrText);
+        console.log('QR-код успешно разобран как JSON:', jsonData);
+        
+        // Проверяем наличие необходимых полей
+        if (jsonData.iin && jsonData.password) {
+          authData = {
+            iin: jsonData.iin,
+            password: jsonData.password,
+            deviceId: jsonData.deviceId || `qr-json-${Date.now()}`
+          };
+          console.log('Обработан JSON формат');
+        } else {
+          throw new Error('Неполные данные в JSON');
+        }
+      } catch (jsonError) {
+        console.log('Не удалось разобрать как JSON, пробуем другие форматы');
+        
+        // АЛЬТЕРНАТИВНЫЕ ВАРИАНТЫ РАЗБОРА:
+        // 1. Если строка содержит только цифры и буквы, считаем:
+        //    - первые 12 символов (или меньше) - это ИИН
+        //    - остальное - пароль
+        if (/^[a-zA-Z0-9]+$/.test(qrText)) {
+          // Простая строка без разделителей
+          authData = {
+            iin: qrText.substring(0, Math.min(12, qrText.length)), 
+            password: qrText.length > 12 ? qrText.substring(12) : 'defaultpass',
+            deviceId: `qr-simple-${Date.now()}`
+          };
+          console.log('Обработан простой формат без разделителей');
+        }
+        // 2. Проверяем известные разделители
+        else if (qrText.includes(':')) {
+          const parts = qrText.split(':');
+          authData = {
+            iin: parts[0] || '000000000000',
+            password: parts[1] || 'defaultpass',
+            deviceId: `qr-colon-${Date.now()}`
+          };
+        } 
+        else if (qrText.includes('|')) {
+          const parts = qrText.split('|');
+          authData = {
+            iin: parts[0] || '000000000000',
+            password: parts[1] || 'defaultpass',
+            deviceId: `qr-pipe-${Date.now()}`
+          };
+        }
+        // 3. Универсальный парсер - извлекаем цифры для ИИН
+        else {
           const numbersOnly = qrText.replace(/\D/g, '');
           authData = {
             iin: numbersOnly.substring(0, Math.min(12, numbersOnly.length)) || '000000000000',
             password: 'qrtext',
             deviceId: `qr-fallback-${Date.now()}`
           };
+          console.log('Использован универсальный парсер с извлечением цифр');
         }
       }
       
