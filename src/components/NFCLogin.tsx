@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { useNFC } from '@/lib/hooks/useNFC'
 import { Spinner, X, QrCode, ArrowsClockwise, Camera } from '@phosphor-icons/react'
@@ -15,11 +15,27 @@ import {
 import { PhoneCall } from '@phosphor-icons/react'
 import QrScanner from 'react-qr-scanner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useRouter } from 'next/navigation'
+import { useToast } from '@/components/ui/use-toast'
+import { signIn } from '@/server/actions/signin'
+import type { NDEFReaderEventResult } from '@/lib/hooks/useNFC'
+import Link from 'next/link'
+import Image from 'next/image'
+import { LoadingIcon } from './icons'
 
 type AuthData = {
   iin: string
   password: string
   deviceId: string
+}
+
+// Тип для событий NFC, который можно использовать вместо NDEFReaderEventResult
+type NFCMessage = {
+  message?: {
+    records: Array<{
+      data?: ArrayBuffer
+    }>
+  }
 }
 
 interface NFCLoginProps {
@@ -32,30 +48,30 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
   const [activeTab, setActiveTab] = useState<string>(isAvailable ? 'nfc' : 'qr')
   const [scanError, setScanError] = useState<string | null>(null)
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment')
+  const [key, setKey] = useState<number>(0)
+  const { toast } = useToast()
+  const router = useRouter()
+  const [qrValue, setQrValue] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const { startScan, isScanning, isSupported } = useNFC()
   
-  // Обработчик события получения данных через NFC
   useEffect(() => {
     const handleAuthData = (event: Event) => {
       const customEvent = event as CustomEvent<AuthData>
       const { iin, password, deviceId } = customEvent.detail
       
-      // Закрываем диалог
       setDialogOpen(false)
       
-      // Вызываем функцию обратного вызова с полученными данными
       onAuthReceived(iin, password, deviceId)
     }
     
-    // Добавляем слушатель события
     window.addEventListener('nfc-auth-data', handleAuthData)
     
-    // Удаляем слушатель при размонтировании
     return () => {
       window.removeEventListener('nfc-auth-data', handleAuthData)
     }
   }, [onAuthReceived])
   
-  // Обработчик начала сканирования
   const handleStartScanning = async () => {
     setDialogOpen(true)
     setScanError(null)
@@ -65,7 +81,6 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
     }
   }
   
-  // Закрытие диалога и остановка NFC
   const handleClose = () => {
     setDialogOpen(false)
     if (isAvailable) {
@@ -73,16 +88,13 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
     }
   }
   
-  // Обработчик успешного сканирования QR-кода
   const handleQrScan = (data: any) => {
     if (data && data.text) {
       try {
         const authData = JSON.parse(data.text)
         if (authData.iin && authData.password && authData.deviceId) {
-          // Закрываем диалог
           setDialogOpen(false)
           
-          // Вызываем функцию обратного вызова с полученными данными
           onAuthReceived(authData.iin, authData.password, authData.deviceId)
         } else {
           setScanError('Неверный формат QR-кода')
@@ -94,17 +106,111 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
     }
   }
   
-  // Обработчик ошибки сканирования QR-кода
   const handleQrError = (err: any) => {
     console.error('Ошибка сканирования QR-кода:', err)
     setScanError('Ошибка сканирования QR-кода')
   }
   
-  // Переключение камеры
   const toggleCamera = () => {
-    setFacingMode(facingMode === 'environment' ? 'user' : 'environment')
+    setFacingMode(prevMode => prevMode === 'environment' ? 'user' : 'environment')
+    setKey(prevKey => prevKey + 1)
   }
-  
+
+  const handleScan = useCallback(
+    (data: { text: string } | null) => {
+      if (data && data.text && !isLoading) {
+        try {
+          setQrValue(data.text)
+          const authData = JSON.parse(data.text)
+          handleAuth(authData)
+        } catch (e) {
+          console.error('Ошибка при обработке QR-кода:', e)
+        }
+      }
+    },
+    [isLoading]
+  )
+
+  const handleAuth = async (authData: {
+    iin: string
+    password: string
+    deviceId: string
+  }) => {
+    try {
+      setIsLoading(true)
+      
+      localStorage.setItem('samga-current-device-id', authData.deviceId)
+      localStorage.setItem('user-iin', authData.iin)
+      localStorage.setItem('user-password', authData.password)
+      
+      const result = await signIn({
+        iin: authData.iin,
+        password: authData.password
+      })
+
+      if (result.success) {
+        toast({
+          title: 'Успешная авторизация',
+          description: 'Вы успешно вошли в систему'
+        })
+        router.push('/dashboard')
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Ошибка авторизации',
+          description: result.error || 'Не удалось войти в систему'
+        })
+      }
+    } catch (error) {
+      console.error('Ошибка при обработке аутентификации:', error)
+      toast({
+        variant: 'destructive',
+        title: 'Ошибка',
+        description: 'Произошла ошибка при авторизации'
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleNFCData = useCallback(
+    (data: NDEFReaderEventResult) => {
+      try {
+        if (data.message) {
+          const record = data.message.records[0]
+          if (record && record.data) {
+            const decoder = new TextDecoder()
+            const text = decoder.decode(record.data)
+            const authData = JSON.parse(text)
+            
+            handleAuth(authData)
+          }
+        }
+      } catch (error) {
+        console.error('Ошибка при обработке NFC данных:', error)
+        toast({
+          variant: 'destructive',
+          title: 'Ошибка NFC',
+          description: 'Не удалось прочитать данные с устройства'
+        })
+      }
+    },
+    [handleAuth]
+  )
+
+  const handleStartNFC = useCallback(() => {
+    if (!isSupported) {
+      toast({
+        variant: 'destructive',
+        title: 'NFC не поддерживается',
+        description: 'Ваше устройство не поддерживает NFC или браузер не имеет доступа к этой функции'
+      })
+      return
+    }
+
+    startScan(handleNFCData)
+  }, [isSupported, startScan, handleNFCData])
+
   return (
     <>
       <div className="mt-6 flex justify-center">
@@ -129,79 +235,139 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
             </DialogDescription>
           </DialogHeader>
           
-          <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              {isAvailable && (
+          {isAvailable ? (
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="nfc">NFC</TabsTrigger>
-              )}
-              <TabsTrigger value="qr" className={isAvailable ? '' : 'col-span-2'}>QR-код</TabsTrigger>
-            </TabsList>
-            
-            {isAvailable && (
-              <TabsContent value="nfc" className="flex flex-col items-center justify-center py-6">
-                {status === 'reading' && (
-                  <>
-                    <Spinner size={48} className="animate-spin text-primary" />
-                    <p className="mt-4 text-center text-sm text-muted-foreground">
-                      Ожидание... <br />
-                      Поднесите ваш телефон к другому устройству
-                    </p>
-                  </>
+                <TabsTrigger value="qr">QR-код</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="nfc" className="py-4 flex flex-col items-center justify-center">
+                {status === 'ready' && (
+                  <div className="text-center">
+                    <div className="flex justify-center mb-4">
+                      <div className="relative w-24 h-24">
+                        <Image 
+                          src="/images/nfc-icon.png"
+                          alt="NFC Icon"
+                          fill
+                          style={{ objectFit: 'contain' }}
+                        />
+                      </div>
+                    </div>
+                    <p className="mb-2">Приложите устройство с NFC-меткой</p>
+                    <Spinner size={32} className="mx-auto animate-spin text-primary" />
+                  </div>
+                )}
+                
+                {status === 'not-started' && (
+                  <div className="text-center">
+                    <div className="flex justify-center mb-4">
+                      <div className="relative w-24 h-24">
+                        <Image 
+                          src="/images/nfc-icon.png"
+                          alt="NFC Icon"
+                          fill
+                          style={{ objectFit: 'contain' }}
+                        />
+                      </div>
+                    </div>
+                    <p className="mb-4">Нажмите кнопку, чтобы начать сканирование NFC</p>
+                    <Button onClick={startReading}>Начать сканирование</Button>
+                  </div>
                 )}
                 
                 {status === 'error' && (
-                  <>
-                    <div className="rounded-full bg-red-100 p-3">
-                      <X className="h-6 w-6 text-red-600" />
-                    </div>
-                    <p className="mt-4 text-center text-sm text-red-600">
-                      Произошла ошибка при сканировании.
-                      <br /> Пожалуйста, попробуйте снова.
-                    </p>
-                  </>
+                  <div className="text-center text-destructive">
+                    <X size={32} className="mx-auto mb-2" />
+                    <p>Произошла ошибка при инициализации NFC</p>
+                    <Button 
+                      className="mt-4" 
+                      variant="outline" 
+                      onClick={startReading}
+                    >
+                      Попробовать снова
+                    </Button>
+                  </div>
                 )}
               </TabsContent>
-            )}
-            
-            <TabsContent value="qr" className="flex flex-col items-center justify-center py-6">
-              <div className="relative w-full max-w-[300px] mx-auto">
-                <div className="relative h-[250px] bg-gray-100 rounded-lg overflow-hidden">
-                  <QrScanner
-                    delay={300}
-                    onError={handleQrError}
-                    onScan={handleQrScan}
-                    style={{ width: '100%', height: '100%' }}
-                    facingMode={facingMode}
-                  />
+              
+              <TabsContent value="qr" className="py-4">
+                <div className="relative">
+                  <div className="bg-black rounded-md overflow-hidden">
+                    <QrScanner 
+                      key={key}
+                      delay={300}
+                      onError={handleQrError}
+                      onScan={handleScan}
+                      style={{ width: '100%', height: '100%' }}
+                      constraints={{
+                        video: {
+                          facingMode: facingMode
+                        }
+                      }}
+                    />
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="absolute bottom-4 right-4 shadow-md"
+                    onClick={toggleCamera}
+                  >
+                    <Camera className="mr-2 h-4 w-4" />
+                    {facingMode === 'user' ? 'Фронтальная камера' : 'Основная камера'}
+                  </Button>
                 </div>
                 
+                {scanError && (
+                  <div className="mt-4 p-2 bg-destructive/10 text-destructive rounded text-sm">
+                    {scanError}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          ) : (
+            <div className="py-4">
+              <div className="relative">
+                <div className="bg-black rounded-md overflow-hidden">
+                  <QrScanner 
+                    key={key}
+                    delay={300}
+                    onError={handleQrError}
+                    onScan={handleScan}
+                    style={{ width: '100%', height: '100%' }}
+                    constraints={{
+                      video: {
+                        facingMode: facingMode
+                      }
+                    }}
+                  />
+                </div>
                 <Button
-                  variant="outline"
-                  size="icon"
-                  className="absolute top-2 right-2 z-10 bg-white/80 backdrop-blur-sm"
+                  variant="secondary"
+                  size="sm"
+                  className="absolute bottom-4 right-4 shadow-md"
                   onClick={toggleCamera}
-                  title="Переключить камеру"
                 >
-                  <Camera className="h-4 w-4" />
+                  <Camera className="mr-2 h-4 w-4" />
+                  {facingMode === 'user' ? 'Фронтальная камера' : 'Основная камера'}
                 </Button>
               </div>
               
               {scanError && (
-                <p className="mt-2 text-center text-sm text-red-600">
+                <div className="mt-4 p-2 bg-destructive/10 text-destructive rounded text-sm">
                   {scanError}
-                </p>
+                </div>
               )}
-              
-              <p className="mt-4 text-center text-sm text-muted-foreground">
-                Наведите камеру на QR-код на экране авторизованного устройства
-                <br />
-                <span className="text-xs">{facingMode === 'environment' ? 'Используется основная камера' : 'Используется фронтальная камера'}</span>
-              </p>
-            </TabsContent>
-          </Tabs>
+            </div>
+          )}
           
-          <DialogFooter>
-            <Button variant="secondary" onClick={handleClose}>
+          <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-between sm:space-x-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleClose}
+            >
               Отмена
             </Button>
           </DialogFooter>

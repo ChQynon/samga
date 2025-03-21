@@ -1,17 +1,29 @@
 declare module 'react-qr-scanner' {
-  import React from 'react'
+  import { ReactNode, Component } from 'react'
   
-  interface QrScannerProps {
-    delay?: number
-    style?: React.CSSProperties
+  export interface QrScannerProps {
+    delay?: number | false
+    style?: object
+    className?: string
     onError?: (error: Error) => void
     onScan?: (data: { text: string } | null) => void
-    resolution?: number
-    facingMode?: 'environment' | 'user'
-    className?: string
+    onLoad?: () => void
+    onImageLoad?: (event: React.SyntheticEvent<HTMLImageElement, Event>) => void
+    facingMode?: 'user' | 'environment'
+    legacyMode?: boolean
+    maxImageSize?: number
+    chooseDeviceId?: () => string
+    constraints?: {
+      video: {
+        facingMode?: 'user' | 'environment'
+        width?: number
+        height?: number
+      }
+      audio?: boolean
+    }
   }
   
-  const QrScanner: React.FC<QrScannerProps>
-  
-  export default QrScanner
+  export default class QrScanner extends Component<QrScannerProps> {
+    openImageDialog: () => void
+  }
 } 

@@ -57,6 +57,8 @@ const getBrowserInfo = (): string => {
 // Ключ для localStorage
 const DEVICES_STORAGE_KEY = 'samga-authorized-devices'
 const CURRENT_DEVICE_KEY = 'samga-current-device-id'
+// Максимальное время жизни устройства без обновления (в миллисекундах) - 7 дней
+const MAX_DEVICE_LIFETIME = 7 * 24 * 60 * 60 * 1000;
 
 export const useDeviceAuth = (): DeviceAuthHook => {
   // Список устройств
@@ -71,7 +73,18 @@ export const useDeviceAuth = (): DeviceAuthHook => {
       const storedDevices = localStorage.getItem(DEVICES_STORAGE_KEY)
       if (storedDevices) {
         const devices = JSON.parse(storedDevices) as DeviceInfo[]
-        setAuthorizedDevices(devices)
+        // Фильтруем устаревшие устройства
+        const currentTime = new Date().getTime();
+        const validDevices = devices.filter(device => 
+          (currentTime - device.timestamp) < MAX_DEVICE_LIFETIME
+        );
+        
+        // Если мы удалили какие-то устройства, сохраняем обновленный список
+        if (validDevices.length !== devices.length) {
+          localStorage.setItem(DEVICES_STORAGE_KEY, JSON.stringify(validDevices));
+        }
+        
+        setAuthorizedDevices(validDevices)
       }
       
       // Проверяем, является ли текущее устройство "шаренным"
@@ -141,13 +154,14 @@ export const useDeviceAuth = (): DeviceAuthHook => {
   // Здесь мы получаем учетные данные из localStorage и готовим их для передачи
   const prepareAuthData = useCallback((): string => {
     try {
-      // В реальном приложении здесь нужно получить учетные данные
-      // из защищенного хранилища или другим безопасным способом
-      const iin = localStorage.getItem('user-iin') || ''
-      const password = localStorage.getItem('user-password') || ''
+      // Получаем данные из localStorage
+      const iin = localStorage.getItem('user-iin')
+      const password = localStorage.getItem('user-password')
       
+      // Проверяем наличие данных
       if (!iin || !password) {
-        throw new Error('Учетные данные не найдены')
+        console.error('Учетные данные не найдены в localStorage')
+        return ''
       }
       
       // Создаем новое устройство
@@ -166,6 +180,43 @@ export const useDeviceAuth = (): DeviceAuthHook => {
       return ''
     }
   }, [authorizeDevice])
+  
+  // Обновление времени последнего доступа для текущего устройства
+  const updateCurrentDeviceTimestamp = useCallback(() => {
+    try {
+      const currentDeviceId = localStorage.getItem(CURRENT_DEVICE_KEY)
+      if (currentDeviceId) {
+        // Обновляем только если устройство найдено в списке
+        const updatedDevices = authorizedDevices.map(device => {
+          if (device.id === currentDeviceId) {
+            const now = new Date()
+            return {
+              ...device,
+              lastAccess: now.toLocaleString('ru'),
+              timestamp: now.getTime()
+            }
+          }
+          return device
+        })
+        
+        setAuthorizedDevices(updatedDevices)
+        saveDevices(updatedDevices)
+      }
+    } catch (e) {
+      console.error('Ошибка при обновлении времени доступа:', e)
+    }
+  }, [authorizedDevices, saveDevices])
+  
+  // Обновляем время последнего доступа при активности пользователя
+  useEffect(() => {
+    if (isCurrentDeviceShared) {
+      // Обновляем временную метку при загрузке и каждый час
+      updateCurrentDeviceTimestamp()
+      const intervalId = setInterval(updateCurrentDeviceTimestamp, 60 * 60 * 1000)
+      
+      return () => clearInterval(intervalId)
+    }
+  }, [isCurrentDeviceShared, updateCurrentDeviceTimestamp])
   
   return {
     authorizedDevices,
