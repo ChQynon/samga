@@ -3,7 +3,21 @@
 import { useState, useCallback, useEffect } from 'react'
 
 // Тип для статуса NFC
-type NFCStatus = 'idle' | 'reading' | 'writing' | 'error'
+type NFCStatus = 'idle' | 'reading' | 'writing' | 'error' | 'ready' | 'not-started'
+
+// Тип для событий NFC Reader
+export type NDEFReaderEventResult = {
+  message?: {
+    records: Array<{
+      recordType?: string
+      mediaType?: string
+      data?: ArrayBuffer
+      encoding?: string
+      lang?: string
+    }>
+  }
+  serialNumber?: string
+}
 
 // Интерфейс взаимодействия с NFC
 export interface NFCHook {
@@ -13,6 +27,9 @@ export interface NFCHook {
   startReading: () => Promise<void>
   startWriting: (message: string) => Promise<void>
   stopNFC: () => void
+  isSupported: boolean
+  isScanning: boolean
+  startScan: (callback: (data: NDEFReaderEventResult) => void) => void
 }
 
 // Тип для хранения информации об устройстве
@@ -28,6 +45,7 @@ export const useNFC = (): NFCHook => {
   const [isAvailable, setIsAvailable] = useState(false)
   const [status, setStatus] = useState<NFCStatus>('idle')
   const [error, setError] = useState<Error | null>(null)
+  const [isScanning, setIsScanning] = useState(false)
   
   // Проверяем доступность NFC API при монтировании
   useEffect(() => {
@@ -43,7 +61,39 @@ export const useNFC = (): NFCHook => {
   const stopNFC = useCallback(() => {
     setStatus('idle')
     setError(null)
+    setIsScanning(false)
   }, [])
+
+  // Запуск сканирования NFC с колбэком
+  const startScan = useCallback((callback: (data: NDEFReaderEventResult) => void) => {
+    if (!isAvailable) {
+      setError(new Error('NFC не поддерживается на этом устройстве'))
+      return
+    }
+    
+    try {
+      setStatus('reading')
+      setError(null)
+      setIsScanning(true)
+      
+      // @ts-ignore - Web NFC API может не быть в TypeScript определениях
+      const ndef = new window.NDEFReader()
+      
+      ndef.scan().then(() => {
+        ndef.addEventListener("reading", (event: NDEFReaderEventResult) => {
+          callback(event)
+        })
+      }).catch((error: Error) => {
+        setError(error)
+        setStatus('error')
+        setIsScanning(false)
+      })
+    } catch (e) {
+      setError(e instanceof Error ? e : new Error('Ошибка инициализации NFC'))
+      setStatus('error')
+      setIsScanning(false)
+    }
+  }, [isAvailable])
   
   // Начать чтение NFC
   const startReading = useCallback(async () => {
@@ -148,6 +198,9 @@ export const useNFC = (): NFCHook => {
     error,
     startReading,
     startWriting,
-    stopNFC
+    stopNFC,
+    isSupported: isAvailable,
+    isScanning,
+    startScan
   }
 } 

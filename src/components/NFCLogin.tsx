@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
-import { useNFC } from '@/lib/hooks/useNFC'
+import { useNFC, NDEFReaderEventResult } from '@/lib/hooks/useNFC'
 import { Spinner, X, QrCode, ArrowsClockwise, Camera } from '@phosphor-icons/react'
 import {
   Dialog,
@@ -15,12 +15,10 @@ import {
 import { PhoneCall } from '@phosphor-icons/react'
 import QrScanner from 'react-qr-scanner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useRouter } from 'next/navigation'
-import { useToast } from '@/components/ui/use-toast'
-import { signIn } from '@/server/actions/signin'
-import type { NDEFReaderEventResult } from '@/lib/hooks/useNFC'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useToast } from '@/components/ui/use-toast'
+import { signIn } from '@/server/actions/signin'
 import { LoadingIcon } from './icons'
 
 type AuthData = {
@@ -29,32 +27,21 @@ type AuthData = {
   deviceId: string
 }
 
-// Тип для событий NFC, который можно использовать вместо NDEFReaderEventResult
-type NFCMessage = {
-  message?: {
-    records: Array<{
-      data?: ArrayBuffer
-    }>
-  }
-}
-
 interface NFCLoginProps {
   onAuthReceived: (iin: string, password: string, deviceId: string) => void
 }
 
 const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
-  const { isAvailable, startReading, status, stopNFC } = useNFC()
+  const { isAvailable, startReading, status, stopNFC, startScan, isScanning, isSupported } = useNFC()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<string>(isAvailable ? 'nfc' : 'qr')
   const [scanError, setScanError] = useState<string | null>(null)
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment')
   const [key, setKey] = useState<number>(0)
   const { toast } = useToast()
-  const router = useRouter()
   const [qrValue, setQrValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const { startScan, isScanning, isSupported } = useNFC()
-  
+
   useEffect(() => {
     const handleAuthData = (event: Event) => {
       const customEvent = event as CustomEvent<AuthData>
@@ -116,6 +103,7 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
     setKey(prevKey => prevKey + 1)
   }
 
+  // Обработка данных, полученных от QR-кода
   const handleScan = useCallback(
     (data: { text: string } | null) => {
       if (data && data.text && !isLoading) {
@@ -131,6 +119,7 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
     [isLoading]
   )
 
+  // Обработка данных аутентификации
   const handleAuth = async (authData: {
     iin: string
     password: string
@@ -139,10 +128,12 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
     try {
       setIsLoading(true)
       
+      // Сохраняем ID устройства и данные пользователя
       localStorage.setItem('samga-current-device-id', authData.deviceId)
       localStorage.setItem('user-iin', authData.iin)
       localStorage.setItem('user-password', authData.password)
       
+      // Выполняем вход
       const result = await signIn({
         iin: authData.iin,
         password: authData.password
@@ -153,7 +144,7 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
           title: 'Успешная авторизация',
           description: 'Вы успешно вошли в систему'
         })
-        router.push('/dashboard')
+        window.location.href = '/dashboard'
       } else {
         toast({
           variant: 'destructive',
@@ -173,16 +164,21 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
     }
   }
 
+  // Обработчик данных с NFC
   const handleNFCData = useCallback(
     (data: NDEFReaderEventResult) => {
       try {
+        // Проверяем наличие сообщения NFC
         if (data.message) {
+          // Извлекаем первую запись
           const record = data.message.records[0]
           if (record && record.data) {
+            // Декодируем данные
             const decoder = new TextDecoder()
             const text = decoder.decode(record.data)
             const authData = JSON.parse(text)
             
+            // Обрабатываем данные авторизации
             handleAuth(authData)
           }
         }
@@ -198,6 +194,7 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
     [handleAuth]
   )
 
+  // Запускаем сканирование NFC при нажатии на кнопку
   const handleStartNFC = useCallback(() => {
     if (!isSupported) {
       toast({
@@ -243,7 +240,7 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
               </TabsList>
               
               <TabsContent value="nfc" className="py-4 flex flex-col items-center justify-center">
-                {status === 'ready' && (
+                {status === 'reading' && (
                   <div className="text-center">
                     <div className="flex justify-center mb-4">
                       <div className="relative w-24 h-24">
@@ -260,7 +257,7 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
                   </div>
                 )}
                 
-                {status === 'not-started' && (
+                {status === 'idle' && (
                   <div className="text-center">
                     <div className="flex justify-center mb-4">
                       <div className="relative w-24 h-24">
@@ -299,12 +296,13 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
                       key={key}
                       delay={300}
                       onError={handleQrError}
-                      onScan={handleScan}
+                      onScan={handleQrScan}
                       style={{ width: '100%', height: '100%' }}
                       constraints={{
                         video: {
                           facingMode: facingMode
-                        }
+                        },
+                        audio: false
                       }}
                     />
                   </div>
@@ -334,12 +332,13 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
                     key={key}
                     delay={300}
                     onError={handleQrError}
-                    onScan={handleScan}
+                    onScan={handleQrScan}
                     style={{ width: '100%', height: '100%' }}
                     constraints={{
                       video: {
                         facingMode: facingMode
-                      }
+                      },
+                      audio: false
                     }}
                   />
                 </div>
