@@ -3,10 +3,10 @@ import { metadata as baseMetadata } from '../layout'
 
 export const metadata = {
   ...baseMetadata,
-  title: 'Условия использования | SAMGA',
+  title: 'Правовая информация | SAMGA',
 }
 
-export default function TermsLayout({
+export default function DisclaimerLayout({
   children,
 }: {
   children: React.ReactNode
