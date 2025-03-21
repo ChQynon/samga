@@ -1,3 +1,5 @@
+'use client'
+
 import React, { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
@@ -42,29 +44,50 @@ const TermsPage = () => {
           }`}
         >
           <div className="rounded-lg border bg-card p-6 transition-all duration-500 hover:shadow-md">
-            <h2 className="mb-3 text-xl font-semibold">Пользовательское соглашение</h2>
+            <h2 className="mb-3 text-xl font-semibold">Общие положения</h2>
             <p className="text-muted-foreground">
-              Используя приложение SAMGA, вы соглашаетесь с условиями данного соглашения. 
-              Если вы не согласны с каким-либо из условий, вы не должны использовать 
-              приложение.
+              Данные условия регулируют использование Дневника SAMGA (https://samga.top/), 
+              улучшенной версии nis mektep с повышенной скоростью входа и работы.
             </p>
           </div>
           
           <div className="rounded-lg border bg-card p-6 transition-all duration-500 hover:shadow-md">
-            <h2 className="mb-3 text-xl font-semibold">Доступность сервиса</h2>
+            <h2 className="mb-3 text-xl font-semibold">Минимальный набор данных для входа</h2>
             <p className="text-muted-foreground">
-              Мы стремимся обеспечить непрерывную работу приложения, но не гарантируем
-              его доступность 24/7. Приложение может быть временно недоступно из-за 
-              технических работ или других обстоятельств.
+              Для авторизации в сервисе пользователь предоставляет только ИИН и пароль, 
+              что обеспечивает быстрый доступ.
             </p>
           </div>
           
           <div className="rounded-lg border bg-card p-6 transition-all duration-500 hover:shadow-md">
-            <h2 className="mb-3 text-xl font-semibold">Изменения в условиях</h2>
+            <h2 className="mb-3 text-xl font-semibold">Локальное хранение учетных данных</h2>
             <p className="text-muted-foreground">
-              Мы оставляем за собой право изменять условия использования в любое время. 
-              Продолжая использовать приложение после внесения изменений, вы принимаете 
-              обновленные условия.
+              Вся информация, необходимая для входа, хранится исключительно на устройстве 
+              пользователя и не передаётся на централизованные серверы.
+            </p>
+          </div>
+
+          <div className="rounded-lg border bg-card p-6 transition-all duration-500 hover:shadow-md">
+            <h2 className="mb-3 text-xl font-semibold">Сбор технических данных</h2>
+            <p className="text-muted-foreground">
+              Дополнительно сохраняются IP-адрес, тип устройства и браузер для повышения 
+              безопасности и оптимизации работы сервиса; данные не используются в иных целях.
+            </p>
+          </div>
+
+          <div className="rounded-lg border bg-card p-6 transition-all duration-500 hover:shadow-md">
+            <h2 className="mb-3 text-xl font-semibold">Ответственность пользователя</h2>
+            <p className="text-muted-foreground">
+              Пользователь обязуется самостоятельно обеспечивать безопасность своего устройства 
+              и использовать надёжные пароли для защиты учетных данных.
+            </p>
+          </div>
+
+          <div className="rounded-lg border bg-card p-6 transition-all duration-500 hover:shadow-md">
+            <h2 className="mb-3 text-xl font-semibold">Ограничение ответственности</h2>
+            <p className="text-muted-foreground">
+              Владелец сервиса не несёт ответственности за последствия утраты данных, 
+              если это произошло вследствие нарушения рекомендаций по безопасности пользователем.
             </p>
           </div>
         </div>
@@ -78,7 +101,7 @@ const TermsPage = () => {
             Используя приложение SAMGA, вы подтверждаете, что прочитали и поняли условия использования.
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
-            Последнее обновление: Март 2023
+            Последнее обновление: Март 2025
           </p>
           
           <div className="mt-6">

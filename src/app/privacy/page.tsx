@@ -1,3 +1,5 @@
+'use client'
+
 import React, { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
@@ -42,29 +44,51 @@ const PrivacyPage = () => {
           }`}
         >
           <div className="rounded-lg border bg-card p-6 transition-all duration-500 hover:shadow-md">
-            <h2 className="mb-3 text-xl font-semibold">Сбор данных</h2>
+            <h2 className="mb-3 text-xl font-semibold">Сбор минимальных данных</h2>
             <p className="text-muted-foreground">
-              Приложение SAMGA собирает только те данные, которые необходимы для обеспечения 
-              функциональности приложения. Мы не передаем ваши данные третьим лицам без вашего 
-              явного согласия.
+              Для входа в аккаунт запрашиваются только ИИН и пароль, что позволяет 
+              обеспечить быструю и безопасную авторизацию.
             </p>
           </div>
           
           <div className="rounded-lg border bg-card p-6 transition-all duration-500 hover:shadow-md">
-            <h2 className="mb-3 text-xl font-semibold">Хранение данных</h2>
+            <h2 className="mb-3 text-xl font-semibold">Локальное хранение</h2>
             <p className="text-muted-foreground">
-              Мы храним минимально необходимый объем данных для работы приложения. 
-              Данные хранятся в зашифрованном виде и с соблюдением современных стандартов 
-              безопасности.
+              Введённые учетные данные сохраняются исключительно локально на устройстве 
+              пользователя и не передаются на центральные серверы.
             </p>
           </div>
           
           <div className="rounded-lg border bg-card p-6 transition-all duration-500 hover:shadow-md">
-            <h2 className="mb-3 text-xl font-semibold">Cookies и технологии отслеживания</h2>
+            <h2 className="mb-3 text-xl font-semibold">Сбор дополнительных данных</h2>
             <p className="text-muted-foreground">
-              Приложение SAMGA использует cookies и подобные технологии для улучшения 
-              пользовательского опыта. Вы можете отключить cookies в настройках вашего 
-              браузера, но это может повлиять на функциональность приложения.
+              Для внутренней статистики мы автоматически сохраняем IP-адрес, тип устройства 
+              и браузер. Эти данные не используются для анализа активности пользователя, 
+              а лишь для обеспечения безопасности и отладки работы сервиса.
+            </p>
+          </div>
+          
+          <div className="rounded-lg border bg-card p-6 transition-all duration-500 hover:shadow-md">
+            <h2 className="mb-3 text-xl font-semibold">Полная защита информации</h2>
+            <p className="text-muted-foreground">
+              Все собираемые данные, включая технические параметры, находятся под надёжной 
+              защитой с использованием современных методов шифрования и технических мер.
+            </p>
+          </div>
+          
+          <div className="rounded-lg border bg-card p-6 transition-all duration-500 hover:shadow-md">
+            <h2 className="mb-3 text-xl font-semibold">Отсутствие аналитики персональных данных</h2>
+            <p className="text-muted-foreground">
+              Личные данные не анализируются для коммерческих целей или рекламы; 
+              дополнительная информация хранится исключительно в целях технического обслуживания.
+            </p>
+          </div>
+          
+          <div className="rounded-lg border bg-card p-6 transition-all duration-500 hover:shadow-md">
+            <h2 className="mb-3 text-xl font-semibold">Поддержка через Telegram</h2>
+            <p className="text-muted-foreground">
+              Все вопросы и обращения пользователей обрабатываются через наш официальный 
+              Telegram-канал, информация о котором размещена на сайте.
             </p>
           </div>
         </div>
@@ -78,7 +102,7 @@ const PrivacyPage = () => {
             Используя приложение SAMGA, вы соглашаетесь с нашей политикой конфиденциальности.
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
-            Последнее обновление: Март 2023
+            Последнее обновление: Март 2025
           </p>
           
           <div className="mt-6">
