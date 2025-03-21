@@ -1,9 +1,38 @@
+'use client'
+
 import React from 'react'
 import AuthForm from '@/widgets/login/AuthForm'
 import Logo from '@/components/misc/Logo'
 import { env } from '@/env'
+import NFCLogin from '@/components/NFCLogin'
+import { useRouter } from 'next-nprogress-bar'
+import { useToast } from '@/lib/providers/ToastProvider'
+import { login } from '@/server/actions/login'
 
 const Page = () => {
+  const router = useRouter()
+  const { showToast } = useToast()
+  
+  // Обработчик получения данных аутентификации через NFC
+  const handleAuthReceived = async (iin: string, password: string, deviceId: string) => {
+    // Сохраняем ID устройства
+    try {
+      localStorage.setItem('samga-current-device-id', deviceId)
+      
+      // Выполняем вход
+      const result = await login(iin, password)
+      if (result.success) {
+        showToast('Вход выполнен успешно через NFC', 'success')
+        router.push('/')
+      } else {
+        showToast('Ошибка при входе: неверные данные аутентификации', 'error')
+      }
+    } catch (e) {
+      console.error('Ошибка при обработке аутентификации через NFC:', e)
+      showToast('Не удалось выполнить вход', 'error')
+    }
+  }
+  
   return (
     <div className="items-left mx-auto flex h-screen max-w-96 flex-col justify-center p-4 text-left page-transition">
       <div className="mb-6 flex items-center">
@@ -19,6 +48,8 @@ const Page = () => {
       </p>
 
       <AuthForm />
+      
+      <NFCLogin onAuthReceived={handleAuthReceived} />
       
       <div className="mt-8 text-center text-sm text-muted-foreground">
         <a href={env.NEXT_PUBLIC_CONTACT_LINK} target="_blank" rel="noopener" className="hover:text-primary transition-colors">
