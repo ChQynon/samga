@@ -58,7 +58,7 @@ const Layout: FC<PropsWithChildren> = ({ children }) => {
         </div>
 
         <div className="mt-3 text-center text-xs text-muted-foreground/70">
-          <p>Данный сайт не связан с <a href="https://www.nis.edu.kz/" target="_blank" rel="noopener" className="hover:underline">АОО "Назарбаев Интеллектуальные школы"</a> и является независимым проектом.</p>
+          <p>приложение 1.03 BETA (содержутся ошибки!)</p>
         </div>
       </footer>
     </>
