@@ -44,11 +44,11 @@ const Layout: FC<PropsWithChildren> = ({ children }) => {
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground">
-          <Link href="/privacy" className="hover:underline">
+          <Link href="/privacy" className="hover:underline" prefetch>
             Политика конфиденциальности
           </Link>
           <span>•</span>
-          <Link href="/terms" className="hover:underline">
+          <Link href="/terms" className="hover:underline" prefetch>
             Условия использования
           </Link>
         </div>
