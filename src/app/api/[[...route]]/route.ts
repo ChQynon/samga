@@ -24,7 +24,7 @@ type RequestWithSession = {
   }
 }
 
-export const authMiddleware = createMiddleware<RequestWithSession>(
+const authMiddleware = createMiddleware<RequestWithSession>(
   async (c, next) => {
     const header = c.req.header('Authorization')
     let accessToken: string | undefined = undefined
