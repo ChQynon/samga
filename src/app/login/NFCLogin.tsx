@@ -194,10 +194,12 @@ const NFCLogin = () => {
     }
   }
   
-  // Улучшенный обработчик сканирования QR-кода
+  // Обновленный обработчик сканирования QR-кода
   const handleScan = useCallback(
     (data: { text: string } | null) => {
-      if (data && data.text && !isProcessing) {
+      if (data && data.text && !isProcessing && data.text !== lastScannedData) {
+        setLastScannedData(data.text); // Сохраняем последние сканированные данные
+        
         try {
           console.log('QR-код считан, данные:', data.text);
           
@@ -282,10 +284,15 @@ const NFCLogin = () => {
           console.error('Ошибка сканирования QR-кода:', error);
           setNfcError(new Error(errorMsg));
           showToast(errorMsg, 'error');
+          
+          // Сбрасываем сканированные данные для следующей попытки
+          setTimeout(() => {
+            setLastScannedData(null);
+          }, 1000);
         }
       }
     },
-    [isProcessing, showToast, isDevelopment]
+    [isProcessing, showToast, isDevelopment, lastScannedData]
   );
   
   // Обработка ошибки сканера
@@ -297,7 +304,7 @@ const NFCLogin = () => {
     }
   }
   
-  // Улучшенная функция обработки данных аутентификации
+  // Обновленная функция обработки данных аутентификации
   const handleAuthData = async (authData: AuthData) => {
     console.log('Начинаем обработку данных аутентификации:', JSON.stringify(authData));
     setIsProcessing(true);
@@ -315,6 +322,20 @@ const NFCLogin = () => {
       localStorage.setItem('user-iin', authData.iin);
       localStorage.setItem('user-password', authData.password);
       localStorage.setItem('samga-current-device-id', authData.deviceId);
+      
+      // Устанавливаем исходное устройство
+      try {
+        if (typeof window !== 'undefined') {
+          // Сохраняем информацию о источнике авторизации
+          const source = {
+            name: getBrowserInfo(),
+            id: `src-${Date.now().toString()}`
+          };
+          localStorage.setItem('samga-auth-source', JSON.stringify(source));
+        }
+      } catch (e) {
+        console.warn('Не удалось сохранить данные об источнике:', e);
+      }
       
       showToast('Данные получены, выполняем авторизацию...', 'info');
       
@@ -409,6 +430,7 @@ const NFCLogin = () => {
         showToast(errorMsg, 'error');
         setIsProcessing(false);
         setQrScanning(true); // Возобновляем сканирование
+        setLastScannedData(null); // Сбрасываем сканированные данные
       }
     } catch (error: any) {
       console.error('Ошибка при обработке данных авторизации:', error);
@@ -417,6 +439,7 @@ const NFCLogin = () => {
       // Сбрасываем состояние обработки
       setIsProcessing(false);
       setQrScanning(true);
+      setLastScannedData(null); // Сбрасываем сканированные данные
     }
   };
   
@@ -561,16 +584,17 @@ const NFCLogin = () => {
                     style={{ width: '100%', height: '300px' }}
                   />
                   
-                  {/* Заменяем анимированный сканер на более простой, без рамок */}
+                  {/* Анимированная голубая линия */}
                   <div className="absolute inset-0 pointer-events-none">
                     {scanAnimation && (
                       <div className="absolute inset-0 flex items-center justify-center">
-                        {/* Только сканирующая линия - без рамок */}
+                        {/* Анимированная линия с изменением цвета */}
                         <div 
-                          className="absolute w-full h-1 bg-primary/70 opacity-50"
+                          className="absolute w-full h-1 opacity-70"
                           style={{
-                            animation: 'qrScanAnimation 2s cubic-bezier(0.4, 0, 0.2, 1) infinite',
-                            boxShadow: '0 0 10px rgba(0, 0, 0, 0.1)'
+                            animation: 'qrScanAnimation 2s cubic-bezier(0.4, 0, 0.2, 1) infinite, colorChange 5s infinite',
+                            background: 'linear-gradient(90deg, rgba(59,130,246,0.8) 0%, rgba(37,99,235,1) 100%)',
+                            boxShadow: '0 0 12px rgba(59,130,246,0.5)'
                           }}
                         ></div>
                       </div>
@@ -661,12 +685,19 @@ const NFCLogin = () => {
         </div>
       )}
       
-      {/* Добавляем стили для анимации сканирования */}
+      {/* Добавляем стили для анимации сканирования и изменения цвета */}
       <style jsx global>{`
         @keyframes qrScanAnimation {
-          0% { transform: translateY(-32px); }
-          50% { transform: translateY(32px); }
-          100% { transform: translateY(-32px); }
+          0% { transform: translateY(-50px); }
+          50% { transform: translateY(50px); }
+          100% { transform: translateY(-50px); }
+        }
+        
+        @keyframes colorChange {
+          0% { filter: hue-rotate(0deg); }
+          33% { filter: hue-rotate(60deg); }
+          66% { filter: hue-rotate(120deg); }
+          100% { filter: hue-rotate(0deg); }
         }
       `}</style>
     </div>
