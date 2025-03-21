@@ -90,12 +90,15 @@ const NFCLogin = () => {
   // Анимация сканера
   const scannerRef = useRef<HTMLDivElement>(null)
   
+  // Заменяем проверку режима разработки во всём файле
+  const isDevelopment = typeof process !== 'undefined' && 
+    typeof process.env !== 'undefined' && 
+    process.env.NODE_ENV === 'development';
+  
   // Установка интервала для проверки и демонстрационного режима
   useEffect(() => {
-    const isDev = process.env.NODE_ENV === 'development';
-    
     // В режиме разработки для QR-кода
-    if (isDev && activeTab === 'qr' && !isProcessing && qrScanning) {
+    if (isDevelopment && activeTab === 'qr' && !isProcessing && qrScanning) {
       const demoTimer = setTimeout(() => {
         console.log('Демонстрационный режим: Симуляция сканирования QR-кода');
         const testData = generateTestData();
@@ -106,7 +109,7 @@ const NFCLogin = () => {
     }
     
     // В режиме разработки для NFC
-    if (isDev && activeTab === 'nfc' && status === 'reading') {
+    if (isDevelopment && activeTab === 'nfc' && status === 'reading') {
       const demoTimer = setTimeout(() => {
         console.log('Демонстрационный режим: Симуляция считывания NFC');
         const testData = generateTestData();
@@ -209,10 +212,15 @@ const NFCLogin = () => {
             // Формат может быть simple: iin:password:deviceId
             const parts = data.text.split(':');
             if (parts.length >= 2) {
+              // Безопасный доступ к элементам массива с значениями по умолчанию
+              const iin = parts[0] ?? '';
+              const password = parts[1] ?? '';
+              const deviceId = parts[2] ?? `device-${Date.now().toString()}`;
+              
               authData = {
-                iin: parts[0],
-                password: parts[1],
-                deviceId: parts[2] || `device-${Date.now().toString()}` // Генерируем ID если не передан
+                iin,
+                password,
+                deviceId
               };
             } else {
               throw new Error('Формат QR-кода не распознан. Требуется формат JSON или iin:password');
@@ -238,7 +246,7 @@ const NFCLogin = () => {
           handleAuthData(authData);
         } catch (error: any) {
           // В режиме разработки для демонстрации
-          if (process.env.NODE_ENV === 'development') {
+          if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
             console.log('Режим разработки: Создаем тестовые данные для авторизации');
             const testData = generateTestData();
             handleAuthData(testData);
@@ -246,7 +254,7 @@ const NFCLogin = () => {
           }
           
           // Для разработки отображаем полное сообщение об ошибке
-          const errorMsg = process.env.NODE_ENV === 'development' 
+          const errorMsg = isDevelopment 
             ? `Ошибка сканирования: ${error.message}. Данные: ${data.text}`
             : 'Ошибка при сканировании QR-кода. Проверьте формат и попробуйте снова.';
           
@@ -290,7 +298,7 @@ const NFCLogin = () => {
       showToast('Данные получены, выполняем авторизацию...', 'info');
       
       // Оптимизация для демонстрационного режима - если нужно
-      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+      if (isDevelopment) {
         setLoginSuccess(true);
         showToast("Устройство успешно авторизовано", 'success');
         
@@ -342,11 +350,18 @@ const NFCLogin = () => {
             if (devices.length >= 5) {
               // Находим самое старое устройство для замены
               let oldestIdx = 0;
-              for (let i = 1; i < devices.length; i++) {
-                if (devices[i] && devices[oldestIdx] && devices[i].timestamp < devices[oldestIdx].timestamp) {
+              let oldestTimestamp = Number.MAX_SAFE_INTEGER;
+              
+              // Проходим по всем устройствам и ищем с самым старым timestamp
+              for (let i = 0; i < devices.length; i++) {
+                const device = devices[i];
+                if (device && typeof device.timestamp === 'number' && device.timestamp < oldestTimestamp) {
+                  oldestTimestamp = device.timestamp;
                   oldestIdx = i;
                 }
               }
+              
+              // Заменяем самое старое устройство
               devices[oldestIdx] = newDevice;
             } else {
               // Добавляем новое устройство
