@@ -1,120 +1,62 @@
 import React from 'react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
-import { motion } from 'framer-motion'
 
 const DisclaimerPage = () => {
-  const fadeInVariants = {
-    hidden: { opacity: 0, y: 10 },
-    visible: (index: number) => ({
-      opacity: 1,
-      y: 0,
-      transition: {
-        delay: index * 0.1,
-        duration: 0.3,
-        ease: 'easeOut',
-      }
-    })
-  }
-
   return (
     <div className="container mx-auto px-4 py-8">
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.3 }}
-        className="mx-auto max-w-3xl"
-      >
+      <div className="mx-auto max-w-3xl">
         <Link href="/">
           <Button variant="ghost" className="mb-4">← Вернуться на главную</Button>
         </Link>
         
-        <motion.h1 
-          initial={{ opacity: 0, y: -5 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.1 }}
-          className="mb-6 text-3xl font-bold"
-        >
+        <h1 className="mb-6 text-3xl font-bold">
           Правовая информация
-        </motion.h1>
+        </h1>
         
-        <div className="space-y-6 text-muted-foreground">
-          <motion.p
-            custom={0}
-            initial="hidden"
-            animate="visible"
-            variants={fadeInVariants}
-          >
-            Последнее обновление: {new Date().toLocaleDateString()}
-          </motion.p>
-          
-          <motion.section
-            custom={1}
-            initial="hidden"
-            animate="visible"
-            variants={fadeInVariants}
-          >
-            <h2 className="mb-3 text-xl font-semibold">Отказ от связи с АОО "Назарбаев Интеллектуальные школы"</h2>
-            <p>
-              Сайт SAMGA (samga.nis) является независимым проектом и не имеет официальной связи с <a href="https://www.nis.edu.kz/" target="_blank" rel="noopener" className="text-primary hover:underline">АОО "Назарбаев Интеллектуальные школы"</a>. Настоящий сайт разработан и поддерживается независимыми разработчиками.
-            </p>
-            <p className="mt-2">
-              Мы не претендуем на официальное представление или одобрение со стороны АОО "Назарбаев Интеллектуальные школы". Любые товарные знаки, логотипы или другие элементы интеллектуальной собственности, принадлежащие АОО "Назарбаев Интеллектуальные школы", используются исключительно в информационных целях и являются собственностью их соответствующих владельцев.
-            </p>
-          </motion.section>
-          
-          <motion.section
-            custom={2}
-            initial="hidden"
-            animate="visible"
-            variants={fadeInVariants}
-          >
-            <h2 className="mb-3 text-xl font-semibold">Цель проекта</h2>
-            <p>
-              Сайт SAMGA создан с образовательной целью для предоставления удобного доступа к информации об учебных целях и табелях успеваемости. Мы стремимся обеспечить удобную платформу для учащихся и их родителей.
-            </p>
-          </motion.section>
-          
-          <motion.section
-            custom={3}
-            initial="hidden"
-            animate="visible"
-            variants={fadeInVariants}
-          >
+        <div className="space-y-6">
+          <div className="rounded-lg border bg-card p-6">
             <h2 className="mb-3 text-xl font-semibold">Отказ от ответственности</h2>
-            <p>
-              Информация, представленная на этом сайте, предоставляется «как есть», без каких-либо гарантий, явных или подразумеваемых. Мы не несем ответственности за точность, полноту, актуальность или надежность любой информации, доступной на этом сайте.
+            <p className="text-muted-foreground">
+              Приложение SAMGA не является официальным продуктом Назарбаев Интеллектуальных школ. 
+              Все данные, отображаемые в приложении, предоставляются исключительно в информационных целях.
             </p>
-            <p className="mt-2">
-              Пользователи сайта используют предоставленную информацию на свой страх и риск. Мы не несем ответственности за любые прямые, косвенные, случайные, особые или штрафные убытки, возникшие в результате доступа к сайту или его использования.
-            </p>
-          </motion.section>
+          </div>
           
-          <motion.section
-            custom={4}
-            initial="hidden"
-            animate="visible"
-            variants={fadeInVariants}
-          >
-            <h2 className="mb-3 text-xl font-semibold">Изменения</h2>
-            <p>
-              Мы оставляем за собой право вносить изменения в правовую информацию в любое время без предварительного уведомления. Продолжая использовать сайт после внесения изменений, вы соглашаетесь с новыми условиями.
+          <div className="rounded-lg border bg-card p-6">
+            <h2 className="mb-3 text-xl font-semibold">Ограничение ответственности</h2>
+            <p className="text-muted-foreground">
+              Разработчики приложения не несут ответственности за точность, полноту или актуальность 
+              информации, предоставляемой через API школы. Все решения, принимаемые на основе данных 
+              из приложения, пользователь принимает на свой страх и риск.
             </p>
-          </motion.section>
+          </div>
           
-          <motion.section
-            custom={5}
-            initial="hidden"
-            animate="visible"
-            variants={fadeInVariants}
-          >
-            <h2 className="mb-3 text-xl font-semibold">Связь с нами</h2>
-            <p>
-              Если у вас есть вопросы или предложения относительно нашей правовой информации, пожалуйста, свяжитесь с нами через Telegram: <a href="https://t.me/samgay_nis" target="_blank" rel="noopener" className="text-primary hover:underline">@samgay_nis</a>
+          <div className="rounded-lg border bg-card p-6">
+            <h2 className="mb-3 text-xl font-semibold">Безопасность данных</h2>
+            <p className="text-muted-foreground">
+              Приложение SAMGA использует исключительно официальные API школы и не хранит логины и пароли 
+              пользователей. Все данные аутентификации передаются напрямую серверам школы. Мы серьезно 
+              относимся к безопасности пользовательских данных и используем современные стандарты шифрования.
             </p>
-          </motion.section>
+          </div>
         </div>
-      </motion.div>
+        
+        <div className="mt-10 text-center">
+          <p className="text-sm text-muted-foreground">
+            Используя приложение SAMGA, вы соглашаетесь с этими условиями.
+          </p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Последнее обновление: Март 2023
+          </p>
+          
+          <div className="mt-6">
+            <Link href="/">
+              <Button>Вернуться на главную</Button>
+            </Link>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

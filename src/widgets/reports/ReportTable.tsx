@@ -19,7 +19,6 @@ import { jsPDF } from 'jspdf'
 import 'jspdf-autotable'
 import { useToast } from '@/lib/providers/ToastProvider'
 import { useState } from 'react'
-import { motion } from 'framer-motion'
 
 // Выносим компонент FormattedMark наверх
 export const FormattedMark = ({ mark }: { mark?: string }) => {
@@ -64,209 +63,105 @@ const ReportTable: FC<{ reportCard?: ReportCard[number] }> = ({
     return count !== 0 ? sum / count : 0
   }, [reportCard])
 
-  // Настройки анимаций
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: { 
-      opacity: 1,
-      transition: { 
-        staggerChildren: 0.05,
-        delayChildren: 0.2
-      }
-    }
-  };
-
-  const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: { 
-      y: 0, 
-      opacity: 1,
-      transition: { duration: 0.4 }
-    }
-  };
-
-  const buttonVariants = {
-    hidden: { scale: 0.9, opacity: 0 },
-    visible: { 
-      scale: 1, 
-      opacity: 1,
-      transition: { 
-        type: "spring",
-        stiffness: 500,
-        damping: 24,
-        mass: 1
-      }
-    },
-    hover: { 
-      scale: 1.05,
-      transition: { duration: 0.2 }
-    },
-    tap: { scale: 0.95 }
-  };
-
+  // Функции экспорта
   const handleExportExcel = async () => {
-    if (!reportCard) return;
-    
     try {
       setLoadingExcel(true);
-      showToast('Подготовка Excel-файла...', 'info');
       
-      // Небольшая задержка для возможности отрисовки UI
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Создаем рабочую книгу Excel
+      const wb = XLSX.utils.book_new();
       
-      const data = [
-        ['Предмет', 'I четверть', 'II четверть', 'III четверть', 'IV четверть', 'Годовая'],
+      // Подготовка данных для Excel
+      const wsData = [
+        ["Предмет", "I", "II", "III", "IV", "Год"],
         ...reportCard.reportCard.map(report => [
           report.subject.name.ru,
-          report.firstPeriod?.ru || '-',
-          report.secondPeriod?.ru || '-',
-          report.thirdPeriod?.ru || '-',
-          report.fourthPeriod?.ru || '-',
-          report.yearMark?.ru || '-'
+          report.firstPeriod?.ru || "-",
+          report.secondPeriod?.ru || "-",
+          report.thirdPeriod?.ru || "-",
+          report.fourthPeriod?.ru || "-",
+          report.yearMark?.ru || "-"
         ]),
-        ['Итоговый GPA', '', '', '', '', calculatedGPA ? calculatedGPA.toFixed(2) : 'Н/Д']
+        ["Итог. GPA", "", "", "", "", calculatedGPA.toFixed(2)]
       ];
-
-      const worksheet = XLSX.utils.aoa_to_sheet(data);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Табель');
       
-      // Настраиваем ширину столбцов для каждой колонки
-      const cols = [
-        { wch: Math.max(...data.map(r => r[0]?.toString().length || 0), 10) }, // Предмет
-        { wch: 12 }, // I четверть
-        { wch: 12 }, // II четверть
-        { wch: 12 }, // III четверть
-        { wch: 12 }, // IV четверть
-        { wch: 12 }  // Годовая
-      ];
-      worksheet['!cols'] = cols;
+      // Создаем страницу с данными
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
       
-      // Конвертируем в бинарную строку
-      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-      const fileName = `Табель_${reportCard.schoolYear.name.ru}.xlsx`;
+      // Добавляем страницу в книгу
+      XLSX.utils.book_append_sheet(wb, ws, "Табель успеваемости");
       
-      // Создаем Blob и сохраняем файл
-      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      // Сохраняем файл
+      const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       
-      // Используем файловый API для более надежного скачивания
-      const downloadLink = document.createElement('a');
-      const url = URL.createObjectURL(blob);
+      saveAs(data, `Табель_${reportCard.schoolYear.name.ru}_${new Date().toLocaleDateString()}.xlsx`);
       
-      downloadLink.href = url;
-      downloadLink.download = fileName;
-      downloadLink.style.display = 'none';
-      document.body.appendChild(downloadLink);
-      
-      downloadLink.click();
-      
-      setTimeout(() => {
-        document.body.removeChild(downloadLink);
-        URL.revokeObjectURL(url);
-        showToast('Excel-файл успешно скачан', 'success');
-        setLoadingExcel(false);
-      }, 100);
-      
+      showToast('Файл Excel успешно скачан', 'success');
     } catch (error) {
-      console.error('Ошибка при создании Excel:', error);
-      showToast('Ошибка при создании Excel-файла', 'error');
+      console.error("Ошибка при экспорте в Excel:", error);
+      showToast('Не удалось сгенерировать Excel файл', 'error');
+    } finally {
       setLoadingExcel(false);
     }
   };
-
+  
   const handleExportPDF = async () => {
-    if (!reportCard) return;
-    
     try {
       setLoadingPDF(true);
-      showToast('Подготовка PDF-файла...', 'info');
       
-      // Небольшая задержка для возможности отрисовки UI
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      const doc = new jsPDF();
+      // Создаем PDF документ
+      const pdf = new jsPDF();
       
       // Добавляем заголовок
-      doc.setFontSize(18);
-      doc.text(`Табель успеваемости: ${reportCard.schoolYear.name.ru}`, 14, 22);
+      pdf.setFontSize(18);
+      pdf.text("Табель успеваемости", 14, 22);
       
-      // Подготавливаем данные для таблицы
-      const tableData = reportCard.reportCard.map(report => [
-        report.subject.name.ru,
-        report.firstPeriod?.ru || '-',
-        report.secondPeriod?.ru || '-',
-        report.thirdPeriod?.ru || '-',
-        report.fourthPeriod?.ru || '-',
-        report.yearMark?.ru || '-'
-      ]);
+      // Добавляем учебный год
+      pdf.setFontSize(12);
+      pdf.text(`Учебный год: ${reportCard.schoolYear.name.ru}`, 14, 30);
       
-      // Добавляем GPA
-      tableData.push(['Итоговый GPA', '', '', '', '', calculatedGPA ? calculatedGPA.toFixed(2) : 'Н/Д']);
-      
-      // Создаем таблицу с использованием autoTable
-      // @ts-ignore - jspdf-autotable расширяет jsPDF прототип
-      doc.autoTable({
-        startY: 30,
-        head: [['Предмет', 'I', 'II', 'III', 'IV', 'Год']],
-        body: tableData,
+      // Создаем таблицу
+      // @ts-ignore
+      pdf.autoTable({
+        startY: 35,
+        head: [["Предмет", "I", "II", "III", "IV", "Год"]],
+        body: [
+          ...reportCard.reportCard.map(report => [
+            report.subject.name.ru,
+            report.firstPeriod?.ru || "-",
+            report.secondPeriod?.ru || "-",
+            report.thirdPeriod?.ru || "-",
+            report.fourthPeriod?.ru || "-",
+            report.yearMark?.ru || "-"
+          ]),
+          ["Итог. GPA", "", "", "", "", calculatedGPA.toFixed(2)]
+        ],
         theme: 'grid',
-        styles: { fontSize: 10, cellPadding: 3 },
-        headStyles: { fillColor: [66, 139, 202], textColor: 255 },
-        alternateRowStyles: { fillColor: [240, 240, 240] }
+        headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+        footStyles: { fillColor: [234, 236, 238], textColor: [0, 0, 0], fontStyle: 'bold' }
       });
       
-      // Добавляем информацию о сайте
-      const pageHeight = doc.internal.pageSize.getHeight();
-      doc.setFontSize(10);
-      doc.text('Сгенерировано на samga.nis', 14, pageHeight - 15);
-      doc.text(`Дата: ${new Date().toLocaleDateString()}`, 14, pageHeight - 10);
+      // Сохраняем PDF
+      pdf.save(`Табель_${reportCard.schoolYear.name.ru}_${new Date().toLocaleDateString()}.pdf`);
       
-      // Используем blob для более надежного скачивания
-      const pdfBlob = doc.output('blob');
-      const fileName = `Табель_${reportCard.schoolYear.name.ru}.pdf`;
-      
-      const downloadLink = document.createElement('a');
-      const url = URL.createObjectURL(pdfBlob);
-      
-      downloadLink.href = url;
-      downloadLink.download = fileName;
-      downloadLink.style.display = 'none';
-      document.body.appendChild(downloadLink);
-      
-      downloadLink.click();
-      
-      setTimeout(() => {
-        document.body.removeChild(downloadLink);
-        URL.revokeObjectURL(url);
-        showToast('PDF-файл успешно скачан', 'success');
-        setLoadingPDF(false);
-      }, 100);
-      
+      showToast('Файл PDF успешно скачан', 'success');
     } catch (error) {
-      console.error('Ошибка при создании PDF:', error);
-      showToast('Ошибка при создании PDF-файла', 'error');
+      console.error("Ошибка при экспорте в PDF:", error);
+      showToast('Не удалось сгенерировать PDF файл', 'error');
+    } finally {
       setLoadingPDF(false);
     }
   };
 
   return (
-    <motion.div
-      initial="hidden"
-      animate="visible"
-      variants={containerVariants}
-    >
-      <motion.div 
-        className="mt-4 flex flex-wrap gap-2 sm:justify-end"
-      >
-        <motion.div
-          variants={buttonVariants}
-          whileHover="hover"
-          whileTap="tap"
-        >
+    <div className="opacity-100">
+      <div className="mt-4 flex flex-wrap gap-2 sm:justify-end">
+        <div>
           <Button 
             variant="outline" 
             size="sm" 
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 hover:scale-105 transition-transform"
             onClick={handleExportExcel}
             disabled={loadingExcel}
           >
@@ -277,17 +172,13 @@ const ReportTable: FC<{ reportCard?: ReportCard[number] }> = ({
             )}
             <span>{loadingExcel ? 'Скачивание...' : 'Скачать в Excel'}</span>
           </Button>
-        </motion.div>
+        </div>
         
-        <motion.div
-          variants={buttonVariants}
-          whileHover="hover"
-          whileTap="tap"
-        >
+        <div>
           <Button 
             variant="outline" 
             size="sm"
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 hover:scale-105 transition-transform"
             onClick={handleExportPDF}
             disabled={loadingPDF}
           >
@@ -298,13 +189,10 @@ const ReportTable: FC<{ reportCard?: ReportCard[number] }> = ({
             )}
             <span>{loadingPDF ? 'Скачивание...' : 'Скачать в PDF'}</span>
           </Button>
-        </motion.div>
-      </motion.div>
+        </div>
+      </div>
 
-      <motion.div
-        variants={containerVariants}
-        className="relative mt-5 overflow-hidden rounded-md border sm:border-0"
-      >
+      <div className="relative mt-5 overflow-hidden rounded-md border sm:border-0">
         <Table className="overflow-x-auto">
           <TableHeader>
             <TableRow>
@@ -317,14 +205,13 @@ const ReportTable: FC<{ reportCard?: ReportCard[number] }> = ({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {reportCard?.reportCard.map((report, index) => (
+            {reportCard?.reportCard.map((report) => (
               <ResponsiveModal
                 key={`report-modal-${report.subject.id}`}
                 trigger={
-                  <motion.tr
+                  <tr
                     key={`report-${report.subject.id}`}
-                    className="hover:bg-secondary/5"
-                    variants={itemVariants}
+                    className="hover:bg-secondary/5 transition-colors"
                   >
                     <TableCell>
                       <span className="hover:underline">
@@ -346,7 +233,7 @@ const ReportTable: FC<{ reportCard?: ReportCard[number] }> = ({
                     <TableCell>
                       <FormattedMark mark={report.yearMark?.ru} />
                     </TableCell>
-                  </motion.tr>
+                  </tr>
                 }
                 title={
                   <span className="scroll-m-20 text-3xl font-extrabold tracking-tight lg:text-4xl">
@@ -364,26 +251,16 @@ const ReportTable: FC<{ reportCard?: ReportCard[number] }> = ({
             <TableRow>
               <TableCell colSpan={5}>Итог. GPA</TableCell>
               <TableCell>
-                <motion.span 
-                  className="text-[18px] font-bold"
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ 
-                    delay: 0.5,
-                    duration: 0.6,
-                    type: "spring",
-                    stiffness: 200
-                  }}
-                >
+                <span className="text-[18px] font-bold">
                   {calculatedGPA ? calculatedGPA.toFixed(2) : 'Н/Д'}
-                </motion.span>
+                </span>
               </TableCell>
             </TableRow>
           </TableFooter>
         </Table>
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   )
 }
 
-export default React.memo(ReportTable)
+export default ReportTable
