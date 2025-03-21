@@ -213,38 +213,31 @@ const NFCLogin = () => {
     }
   };
   
-  // Основная функция авторизации - упрощенная и надежная
+  // Основная функция авторизации - гарантированно работающая
   const handleAuthData = async (authData: AuthData) => {
-    console.log('Начинаем вход:', authData.iin);
+    console.log('Начинаем вход:', authData);
     setIsProcessing(true);
     
     try {
-      // Сохраняем базовые данные
+      // Базовые данные для входа
       localStorage.setItem('user-iin', authData.iin);
       localStorage.setItem('user-password', authData.password);
       localStorage.setItem('samga-current-device-id', authData.deviceId);
       
-      // Демо-режим для быстрого входа
+      // ГАРАНТИРОВАННЫЙ ВХОД В ДЕМО-РЕЖИМЕ
+      // Всегда работает в режиме разработки
       if (isDevelopment) {
-        setLoginSuccess(true);
-        showToast("Вход выполнен успешно!", 'success');
-        setTimeout(() => window.location.href = '/', 1500);
-        return;
-      }
-      
-      // Выполняем вход
-      const result = await login(authData.iin, authData.password);
-      
-      if (result.success) {
-        // Сохраняем информацию о новом устройстве
+        console.log("ДЕМО-РЕЖИМ: Выполняем успешный вход без API");
+        
+        // Сохраняем информацию о новом устройстве для демонстрации
         try {
-          let devices = [];
+          let devices: any[] = [];
           const storedDevices = localStorage.getItem('samga-authorized-devices');
           if (storedDevices) {
             devices = JSON.parse(storedDevices);
           }
           
-          // Простой объект устройства
+          // Новое устройство для демо
           const newDevice = {
             id: authData.deviceId,
             name: getBrowserInfo(),
@@ -252,39 +245,106 @@ const NFCLogin = () => {
             timestamp: Date.now()
           };
           
-          // Проверяем существование устройства
-          const existingIndex = devices.findIndex((d: any) => d && d.id === authData.deviceId);
-          if (existingIndex !== -1) {
-            devices[existingIndex] = newDevice;
-          } else {
-            // Ограничение на 5 устройств
-            if (devices.length >= 5) {
-              // Находим и заменяем самое старое
-              devices.sort((a: any, b: any) => a.timestamp - b.timestamp);
-              devices[0] = newDevice;
-            } else {
-              devices.push(newDevice);
-            }
+          // Добавляем устройство, если еще нет 5 устройств
+          if (devices.length < 5) {
+            devices.push(newDevice);
           }
           
           localStorage.setItem('samga-authorized-devices', JSON.stringify(devices));
         } catch (e) {
-          console.warn('Не удалось обновить список устройств:', e);
+          console.log("Не удалось сохранить устройство, но вход всё равно будет выполнен");
         }
         
+        // Показываем успешный результат
         setLoginSuccess(true);
         showToast("Вход выполнен успешно!", 'success');
-        setTimeout(() => window.location.href = '/', 1500);
-      } else {
-        // Ошибка входа
-        const errorMsg = result.errors?.iin || result.errors?.password || 'Ошибка входа';
-        showToast(errorMsg, 'error');
+        
+        // Переадресация через короткую задержку
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 1500);
+        
+        return;
+      }
+      
+      // ПРОИЗВОДСТВЕННЫЙ РЕЖИМ: ВЫЗОВ API
+      console.log('Вызываем API входа...');
+      try {
+        // Вызов API входа
+        const result = await login(authData.iin, authData.password);
+        console.log('Результат API входа:', result);
+        
+        if (result && result.success) {
+          // Вход успешный - обновляем список устройств
+          console.log('Вход успешен, обновляем список устройств');
+          
+          try {
+            let devices: any[] = [];
+            const storedDevices = localStorage.getItem('samga-authorized-devices');
+            if (storedDevices) {
+              devices = JSON.parse(storedDevices);
+            }
+            
+            // Новое устройство
+            const newDevice = {
+              id: authData.deviceId,
+              name: getBrowserInfo(),
+              lastAccess: new Date().toLocaleString('ru'),
+              timestamp: Date.now()
+            };
+            
+            // Проверяем, есть ли уже такое устройство
+            const existingIndex = devices.findIndex(d => d && d.id === authData.deviceId);
+            
+            if (existingIndex !== -1) {
+              // Обновляем существующее устройство
+              devices[existingIndex] = newDevice;
+            } else {
+              // Ограничение на 5 устройств
+              if (devices.length >= 5) {
+                // Сортируем по времени и заменяем самое старое
+                devices.sort((a, b) => a.timestamp - b.timestamp);
+                devices[0] = newDevice;
+              } else {
+                // Добавляем новое устройство
+                devices.push(newDevice);
+              }
+            }
+            
+            localStorage.setItem('samga-authorized-devices', JSON.stringify(devices));
+          } catch (e) {
+            console.warn('Не удалось обновить список устройств, но вход выполнен');
+          }
+          
+          // Успешное завершение входа
+          setLoginSuccess(true);
+          showToast("Вход выполнен успешно!", 'success');
+          
+          // Переадресация на главную страницу
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 1500);
+        } else {
+          // Ошибка входа - показываем сообщение
+          const errorMsg = result?.errors?.iin || result?.errors?.password || 'Ошибка входа: неверные данные';
+          console.error('Ошибка входа:', errorMsg);
+          showToast(errorMsg, 'error');
+          
+          // Сбрасываем состояние для повторной попытки
+          setIsProcessing(false);
+          setNfcError(new Error(errorMsg));
+        }
+      } catch (apiError) {
+        console.error('Ошибка при вызове API входа:', apiError);
+        showToast("Не удалось выполнить вход. Попробуйте позже.", 'error');
         setIsProcessing(false);
+        setNfcError(new Error('Ошибка соединения с сервером'));
       }
     } catch (error: any) {
-      console.error('Ошибка авторизации:', error);
-      showToast("Ошибка авторизации", 'error');
+      console.error('Критическая ошибка входа:', error);
+      showToast("Ошибка входа: " + (error.message || 'неизвестная ошибка'), 'error');
       setIsProcessing(false);
+      setNfcError(error);
     }
   };
   
@@ -316,6 +376,16 @@ const NFCLogin = () => {
           Используйте авторизованное устройство для быстрого входа.
         </p>
       </div>
+      
+      {/* БОЛЬШАЯ КНОПКА БЫСТРОГО ВХОДА В РЕЖИМЕ РАЗРАБОТКИ */}
+      {isDevelopment && (
+        <Button 
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 mb-4"
+          onClick={() => handleAuthData(generateTestData())}
+        >
+          БЫСТРЫЙ ВХОД (ДЕМО-РЕЖИМ)
+        </Button>
+      )}
       
       <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2">
@@ -488,20 +558,6 @@ const NFCLogin = () => {
           )}
         </TabsContent>
       </Tabs>
-      
-      {isDevelopment && !isProcessing && (
-        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-          <p className="text-xs text-blue-800 mb-1 font-medium">Демо-режим</p>
-          <Button 
-            variant="outline" 
-            size="sm"
-            className="mt-1 w-full"
-            onClick={() => handleAuthData(generateTestData())}
-          >
-            Симулировать успешный вход
-          </Button>
-        </div>
-      )}
       
       <style jsx global>{`
         @keyframes qrScanAnimation {
