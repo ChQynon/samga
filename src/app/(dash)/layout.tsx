@@ -51,10 +51,6 @@ const Layout: FC<PropsWithChildren> = ({ children }) => {
           <Link href="/terms" className="hover:underline">
             Условия использования
           </Link>
-          <span>•</span>
-          <Link href="/disclaimer" className="hover:underline">
-            Правовая информация
-          </Link>
         </div>
 
         <div className="mt-3 text-center text-xs text-muted-foreground/70">

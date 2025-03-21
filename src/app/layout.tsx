@@ -9,6 +9,7 @@ import IconProvider from '@/lib/providers/IconProvider'
 import ProgressProvider from '@/lib/providers/ProgressProvider'
 import QueryProvider from '@/lib/providers/QueryProvider'
 import ToastProvider from '@/lib/providers/ToastProvider'
+import PagePreloader from '@/components/PagePreloader'
 
 const fontSans = FontSans({
   subsets: ['latin', 'cyrillic'],
@@ -81,6 +82,7 @@ export default function RootLayout({ children }: PropsWithChildren) {
               <ThemeProvider>
                 <IconProvider>
                   <ToastProvider>
+                    <PagePreloader />
                     {children}
                   </ToastProvider>
                 </IconProvider>
