@@ -19,6 +19,26 @@ import { jsPDF } from 'jspdf'
 import 'jspdf-autotable'
 import { useToast } from '@/lib/providers/ToastProvider'
 import { useState } from 'react'
+import { motion } from 'framer-motion'
+
+// Выносим компонент FormattedMark наверх
+export const FormattedMark = ({ mark }: { mark?: string }) => {
+  if (!mark) return <span className="text-muted-foreground">-</span>
+
+  const formattedMark = Number(mark)
+
+  if (isNaN(formattedMark)) return <span>{mark.toUpperCase()}</span>
+
+  let textColor = 'text-red-500'
+  if (formattedMark === 4) textColor = 'text-yellow-500'
+  else if (formattedMark === 5) textColor = 'text-green-500'
+
+  return (
+    <span className={`text-[16px] font-extrabold ${textColor}`}>
+      {formattedMark}
+    </span>
+  )
+}
 
 const ReportTable: FC<{ reportCard?: ReportCard[number] }> = ({
   reportCard,
@@ -43,6 +63,46 @@ const ReportTable: FC<{ reportCard?: ReportCard[number] }> = ({
 
     return count !== 0 ? sum / count : 0
   }, [reportCard])
+
+  // Настройки анимаций
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: { 
+      opacity: 1,
+      transition: { 
+        staggerChildren: 0.05,
+        delayChildren: 0.2
+      }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { y: 20, opacity: 0 },
+    visible: { 
+      y: 0, 
+      opacity: 1,
+      transition: { duration: 0.4 }
+    }
+  };
+
+  const buttonVariants = {
+    hidden: { scale: 0.9, opacity: 0 },
+    visible: { 
+      scale: 1, 
+      opacity: 1,
+      transition: { 
+        type: "spring",
+        stiffness: 500,
+        damping: 24,
+        mass: 1
+      }
+    },
+    hover: { 
+      scale: 1.05,
+      transition: { duration: 0.2 }
+    },
+    tap: { scale: 0.95 }
+  };
 
   const handleExportExcel = async () => {
     if (!reportCard) return;
@@ -190,119 +250,139 @@ const ReportTable: FC<{ reportCard?: ReportCard[number] }> = ({
   };
 
   return (
-    <div>
-      <div className="mt-4 flex flex-wrap gap-2 sm:justify-end">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          className="flex items-center gap-2"
-          onClick={handleExportExcel}
-          disabled={loadingExcel}
+    <motion.div
+      initial="hidden"
+      animate="visible"
+      variants={containerVariants}
+    >
+      <motion.div 
+        className="mt-4 flex flex-wrap gap-2 sm:justify-end"
+      >
+        <motion.div
+          variants={buttonVariants}
+          whileHover="hover"
+          whileTap="tap"
         >
-          {loadingExcel ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <FileSpreadsheet className="h-4 w-4" />
-          )}
-          <span>{loadingExcel ? 'Скачивание...' : 'Скачать в Excel'}</span>
-        </Button>
-        <Button 
-          variant="outline" 
-          size="sm"
-          className="flex items-center gap-2"
-          onClick={handleExportPDF}
-          disabled={loadingPDF}
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="flex items-center gap-2"
+            onClick={handleExportExcel}
+            disabled={loadingExcel}
+          >
+            {loadingExcel ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileSpreadsheet className="h-4 w-4" />
+            )}
+            <span>{loadingExcel ? 'Скачивание...' : 'Скачать в Excel'}</span>
+          </Button>
+        </motion.div>
+        
+        <motion.div
+          variants={buttonVariants}
+          whileHover="hover"
+          whileTap="tap"
         >
-          {loadingPDF ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <FileText className="h-4 w-4" />
-          )}
-          <span>{loadingPDF ? 'Скачивание...' : 'Скачать в PDF'}</span>
-        </Button>
-      </div>
+          <Button 
+            variant="outline" 
+            size="sm"
+            className="flex items-center gap-2"
+            onClick={handleExportPDF}
+            disabled={loadingPDF}
+          >
+            {loadingPDF ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileText className="h-4 w-4" />
+            )}
+            <span>{loadingPDF ? 'Скачивание...' : 'Скачать в PDF'}</span>
+          </Button>
+        </motion.div>
+      </motion.div>
 
-      <Table className="mt-5 overflow-x-auto border-[1px] sm:border-0">
-        <TableHeader>
-          <TableRow>
-            <TableHead className="min-w-[150px]">Предмет</TableHead>
-            <TableHead className="min-w-[75px]">I</TableHead>
-            <TableHead className="min-w-[75px]">II </TableHead>
-            <TableHead className="min-w-[75px]">III</TableHead>
-            <TableHead className="min-w-[75px]">IV</TableHead>
-            <TableHead className="min-w-[75px]">Год</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {reportCard?.reportCard.map((report) => (
-            <ResponsiveModal
-              trigger={
-                <TableRow key={`report-${report.subject.id}`}>
-                  <TableCell>
-                    <span className="hover:underline">
-                      {report.subject.name.ru}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <FormattedMark mark={report.firstPeriod?.ru} />
-                  </TableCell>
-                  <TableCell>
-                    <FormattedMark mark={report.secondPeriod?.ru} />
-                  </TableCell>
-                  <TableCell>
-                    <FormattedMark mark={report.thirdPeriod?.ru} />
-                  </TableCell>
-                  <TableCell>
-                    <FormattedMark mark={report.fourthPeriod?.ru} />
-                  </TableCell>
-                  <TableCell>
-                    <FormattedMark mark={report.yearMark?.ru} />
-                  </TableCell>
-                </TableRow>
-              }
-              title={
-                <span className="scroll-m-20 text-3xl font-extrabold tracking-tight lg:text-4xl">
-                  {report.subject.name.ru}
-                </span>
-              }
-              description={<span>{reportCard?.schoolYear.name.ru}</span>}
-              close={<Button variant="outline">Закрыть</Button>}
-              key={`report-modal-${report.subject.id}`}
-            >
-              <ReportDetails report={report} />
-            </ResponsiveModal>
-          ))}
-        </TableBody>
-        <TableFooter>
-          <TableRow>
-            <TableCell colSpan={5}>Итог. GPA</TableCell>
-            <TableCell>
-              <span className="text-[18px] font-bold">
-                {calculatedGPA ? calculatedGPA.toFixed(2) : 'Н/Д'}
-              </span>
-            </TableCell>
-          </TableRow>
-        </TableFooter>
-      </Table>
-    </div>
-  )
-}
-
-export const FormattedMark = ({ mark }: { mark?: string }) => {
-  if (!mark) return <span className="text-muted-foreground">-</span>
-
-  const formattedMark = Number(mark)
-
-  if (isNaN(formattedMark)) return <span>{mark.toUpperCase()}</span>
-
-  let textColor = 'text-red-500'
-  if (formattedMark === 4) textColor = 'text-yellow-500'
-  else if (formattedMark === 5) textColor = 'text-green-500'
-
-  return (
-    <span className={`text-[16px] font-extrabold ${textColor}`}>
-      {formattedMark}
-    </span>
+      <motion.div
+        variants={containerVariants}
+        className="relative mt-5 overflow-hidden rounded-md border sm:border-0"
+      >
+        <Table className="overflow-x-auto">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="min-w-[150px]">Предмет</TableHead>
+              <TableHead className="min-w-[75px]">I</TableHead>
+              <TableHead className="min-w-[75px]">II </TableHead>
+              <TableHead className="min-w-[75px]">III</TableHead>
+              <TableHead className="min-w-[75px]">IV</TableHead>
+              <TableHead className="min-w-[75px]">Год</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {reportCard?.reportCard.map((report, index) => (
+              <ResponsiveModal
+                key={`report-modal-${report.subject.id}`}
+                trigger={
+                  <motion.tr
+                    key={`report-${report.subject.id}`}
+                    className="hover:bg-secondary/5"
+                    variants={itemVariants}
+                  >
+                    <TableCell>
+                      <span className="hover:underline">
+                        {report.subject.name.ru}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <FormattedMark mark={report.firstPeriod?.ru} />
+                    </TableCell>
+                    <TableCell>
+                      <FormattedMark mark={report.secondPeriod?.ru} />
+                    </TableCell>
+                    <TableCell>
+                      <FormattedMark mark={report.thirdPeriod?.ru} />
+                    </TableCell>
+                    <TableCell>
+                      <FormattedMark mark={report.fourthPeriod?.ru} />
+                    </TableCell>
+                    <TableCell>
+                      <FormattedMark mark={report.yearMark?.ru} />
+                    </TableCell>
+                  </motion.tr>
+                }
+                title={
+                  <span className="scroll-m-20 text-3xl font-extrabold tracking-tight lg:text-4xl">
+                    {report.subject.name.ru}
+                  </span>
+                }
+                description={<span>{reportCard?.schoolYear.name.ru}</span>}
+                close={<Button variant="outline">Закрыть</Button>}
+              >
+                <ReportDetails report={report} />
+              </ResponsiveModal>
+            ))}
+          </TableBody>
+          <TableFooter>
+            <TableRow>
+              <TableCell colSpan={5}>Итог. GPA</TableCell>
+              <TableCell>
+                <motion.span 
+                  className="text-[18px] font-bold"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ 
+                    delay: 0.5,
+                    duration: 0.6,
+                    type: "spring",
+                    stiffness: 200
+                  }}
+                >
+                  {calculatedGPA ? calculatedGPA.toFixed(2) : 'Н/Д'}
+                </motion.span>
+              </TableCell>
+            </TableRow>
+          </TableFooter>
+        </Table>
+      </motion.div>
+    </motion.div>
   )
 }
 
