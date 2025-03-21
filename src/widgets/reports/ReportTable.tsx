@@ -1,4 +1,4 @@
-import React, { FC, useMemo } from 'react'
+import React, { FC, useEffect, useMemo, useState } from 'react'
 import {
   Table,
   TableBody,
@@ -18,7 +18,7 @@ import * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
 import 'jspdf-autotable'
 import { useToast } from '@/lib/providers/ToastProvider'
-import { useState } from 'react'
+import { useState as useStateImport } from 'react'
 
 // Выносим компонент FormattedMark наверх
 export const FormattedMark = ({ mark }: { mark?: string }) => {
@@ -45,6 +45,27 @@ const ReportTable: FC<{ reportCard?: ReportCard[number] }> = ({
   const { showToast } = useToast();
   const [loadingExcel, setLoadingExcel] = useState(false);
   const [loadingPDF, setLoadingPDF] = useState(false);
+  
+  // Состояния для анимаций
+  const [buttonsVisible, setButtonsVisible] = useState(false);
+  const [tableVisible, setTableVisible] = useState(false);
+  const [rowsVisible, setRowsVisible] = useState(false);
+  const [footerVisible, setFooterVisible] = useState(false);
+  
+  useEffect(() => {
+    // Анимация появления элементов с задержкой
+    const buttonsTimer = setTimeout(() => setButtonsVisible(true), 100);
+    const tableTimer = setTimeout(() => setTableVisible(true), 300);
+    const rowsTimer = setTimeout(() => setRowsVisible(true), 500);
+    const footerTimer = setTimeout(() => setFooterVisible(true), 800);
+    
+    return () => {
+      clearTimeout(buttonsTimer);
+      clearTimeout(tableTimer);
+      clearTimeout(rowsTimer);
+      clearTimeout(footerTimer);
+    };
+  }, []);
   
   if (!reportCard) return <></>
 
@@ -156,7 +177,11 @@ const ReportTable: FC<{ reportCard?: ReportCard[number] }> = ({
 
   return (
     <div className="opacity-100">
-      <div className="mt-4 flex flex-wrap gap-2 sm:justify-end">
+      <div 
+        className={`mt-4 flex flex-wrap gap-2 sm:justify-end transition-all duration-500 transform ${
+          buttonsVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+        }`}
+      >
         <div>
           <Button 
             variant="outline" 
@@ -192,7 +217,11 @@ const ReportTable: FC<{ reportCard?: ReportCard[number] }> = ({
         </div>
       </div>
 
-      <div className="relative mt-5 overflow-hidden rounded-md border sm:border-0">
+      <div 
+        className={`relative mt-5 overflow-hidden rounded-md border sm:border-0 transition-all duration-700 transform ${
+          tableVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+        }`}
+      >
         <Table className="overflow-x-auto">
           <TableHeader>
             <TableRow>
@@ -204,14 +233,21 @@ const ReportTable: FC<{ reportCard?: ReportCard[number] }> = ({
               <TableHead className="min-w-[75px]">Год</TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody>
-            {reportCard?.reportCard.map((report) => (
+          <TableBody className={`transition-opacity duration-700 ${rowsVisible ? 'opacity-100' : 'opacity-0'}`}>
+            {reportCard?.reportCard.map((report, index) => (
               <ResponsiveModal
                 key={`report-modal-${report.subject.id}`}
                 trigger={
                   <tr
                     key={`report-${report.subject.id}`}
-                    className="hover:bg-secondary/5 transition-colors"
+                    className={`hover:bg-secondary/5 transition-all duration-500 transform ${
+                      rowsVisible 
+                        ? 'opacity-100 translate-y-0' 
+                        : 'opacity-0 translate-y-4'
+                    }`}
+                    style={{
+                      transitionDelay: `${index * 50}ms`
+                    }}
                   >
                     <TableCell>
                       <span className="hover:underline">
@@ -248,7 +284,11 @@ const ReportTable: FC<{ reportCard?: ReportCard[number] }> = ({
             ))}
           </TableBody>
           <TableFooter>
-            <TableRow>
+            <TableRow 
+              className={`transition-all duration-700 transform ${
+                footerVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+              }`}
+            >
               <TableCell colSpan={5}>Итог. GPA</TableCell>
               <TableCell>
                 <span className="text-[18px] font-bold">
