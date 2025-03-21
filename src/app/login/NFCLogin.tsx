@@ -194,45 +194,69 @@ const NFCLogin = () => {
   // Улучшенный обработчик сканирования QR-кода
   const handleScan = useCallback(
     (data: { text: string } | null) => {
-      if (!qrScanning) return;
-      
       if (data && data.text && !isProcessing) {
-        console.log('QR-код считан:', data.text);
         try {
-          // Проверяем структуру данных перед обработкой
-          const parsed = JSON.parse(data.text);
+          console.log('QR-код считан, данные:', data.text);
           
-          // Проверяем правильность форматирования данных
-          if (!parsed.iin || !parsed.password || !parsed.deviceId) {
-            throw new Error('QR-код не содержит необходимых данных для авторизации');
-          }
+          // Проверяем, возможно это просто строка без JSON формата
+          let authData: AuthData;
           
-          // Только если данные отличаются от последних сканированных
-          if (data.text !== lastScannedData) {
-            setLastScannedData(data.text);
-            handleAuthData(parsed);
-          }
-        } catch (error: any) {
-          // В режиме разработки для демонстрации
-          if (process.env.NODE_ENV === 'development' && data.text.includes('demo')) {
-            try {
-              // Создаем тестовые данные
-              const testData = generateTestData();
-              handleAuthData(testData);
-              return;
-            } catch (e) {
-              console.error('Ошибка при создании тестовых данных:', e);
+          try {
+            // Пробуем распарсить JSON
+            authData = JSON.parse(data.text);
+          } catch (parseError) {
+            // Если не JSON, пытаемся проверить другие форматы
+            // Формат может быть simple: iin:password:deviceId
+            const parts = data.text.split(':');
+            if (parts.length >= 2) {
+              authData = {
+                iin: parts[0],
+                password: parts[1],
+                deviceId: parts[2] || `device-${Date.now().toString()}` // Генерируем ID если не передан
+              };
+            } else {
+              throw new Error('Формат QR-кода не распознан. Требуется формат JSON или iin:password');
             }
           }
           
-          const errorMsg = error.message || 'Ошибка при сканировании QR-кода';
-          console.error('Ошибка сканирования QR-кода:', errorMsg);
+          // Проверяем наличие необходимых данных
+          if (!authData.iin || !authData.password) {
+            throw new Error('QR-код не содержит необходимых данных ИИН и пароля для авторизации');
+          }
+          
+          // Добавляем deviceId если не передан
+          if (!authData.deviceId) {
+            authData.deviceId = `device-${Date.now().toString()}`;
+          }
+          
+          console.log('Данные QR-кода успешно распознаны, ИИН:', authData.iin, 'ID:', authData.deviceId);
+          
+          // Показываем уведомление об успешном сканировании
+          showToast('QR-код успешно считан! Выполняем авторизацию...', 'success');
+          
+          // Обрабатываем полученные данные
+          handleAuthData(authData);
+        } catch (error: any) {
+          // В режиме разработки для демонстрации
+          if (process.env.NODE_ENV === 'development') {
+            console.log('Режим разработки: Создаем тестовые данные для авторизации');
+            const testData = generateTestData();
+            handleAuthData(testData);
+            return;
+          }
+          
+          // Для разработки отображаем полное сообщение об ошибке
+          const errorMsg = process.env.NODE_ENV === 'development' 
+            ? `Ошибка сканирования: ${error.message}. Данные: ${data.text}`
+            : 'Ошибка при сканировании QR-кода. Проверьте формат и попробуйте снова.';
+          
+          console.error('Ошибка сканирования QR-кода:', error);
           setNfcError(new Error(errorMsg));
           showToast(errorMsg, 'error');
         }
       }
     },
-    [lastScannedData, isProcessing, qrScanning]
+    [isProcessing, showToast]
   );
   
   // Обработка ошибки сканера
@@ -246,7 +270,7 @@ const NFCLogin = () => {
   
   // Улучшенная функция обработки данных аутентификации
   const handleAuthData = async (authData: AuthData) => {
-    console.log('Обрабатываем данные аутентификации:', authData);
+    console.log('Начинаем обработку данных аутентификации:', JSON.stringify(authData));
     setIsProcessing(true);
     setQrScanning(false);
     
@@ -265,120 +289,98 @@ const NFCLogin = () => {
       
       showToast('Данные получены, выполняем авторизацию...', 'info');
       
-      // Обрабатываем список устройств
-      const now = new Date();
-      let devices: ExtendedDeviceInfo[] = [];
-      
-      try {
-        const storedDevices = localStorage.getItem('samga-authorized-devices');
-        if (storedDevices) {
-          devices = JSON.parse(storedDevices);
-        }
-      } catch (e) {
-        console.error('Ошибка при чтении списка устройств:', e);
+      // Оптимизация для демонстрационного режима - если нужно
+      if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+        setLoginSuccess(true);
+        showToast("Устройство успешно авторизовано", 'success');
+        
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 2000);
+        return;
       }
       
-      // Создаем новое устройство
-      const newDevice: ExtendedDeviceInfo = {
-        id: authData.deviceId,
-        name: getBrowserInfo(),
-        browser: navigator.userAgent,
-        lastAccess: now.toLocaleString('ru'),
-        timestamp: now.getTime(),
-        source: sourceDevice // Добавляем информацию об устройстве, с которого был выполнен вход
-      };
+      // Реальный API вызов для продакшен
+      console.log('Вызываем API для входа с ИИН:', authData.iin);
+      const result = await login(authData.iin, authData.password);
+      console.log('Результат API входа:', result);
       
-      // Проверяем, существует ли уже это устройство
-      const existingDeviceIndex = devices.findIndex(device => device && device.id === authData.deviceId);
-      
-      // Исправляем обновление существующего устройства
-      if (existingDeviceIndex !== -1 && devices[existingDeviceIndex]) {
-        // Обновляем существующее устройство
-        const existingDevice = devices[existingDeviceIndex];
-        devices[existingDeviceIndex] = {
-          id: existingDevice.id || authData.deviceId,
-          name: existingDevice.name || getBrowserInfo(),
-          browser: existingDevice.browser || navigator.userAgent,
-          lastAccess: now.toLocaleString('ru'),
-          timestamp: now.getTime(),
-          source: sourceDevice
-        };
-      } else {
-        // Проверяем, не превышен ли лимит (5 устройств)
-        if (devices.length >= 5) {
-          // Если превышен, заменяем самое старое устройство
-          let oldestIndex = 0;
-          let oldestTimestamp = devices[0]?.timestamp || 0;
+      if (result.success) {
+        // Обновляем список авторизованных устройств
+        try {
+          let devices: ExtendedDeviceInfo[] = [];
+          const storedDevices = localStorage.getItem('samga-authorized-devices');
+          if (storedDevices) {
+            devices = JSON.parse(storedDevices);
+          }
           
-          for (let i = 1; i < devices.length; i++) {
-            const device = devices[i];
-            if (device && device.timestamp < oldestTimestamp) {
-              oldestTimestamp = device.timestamp;
-              oldestIndex = i;
+          // Создаем новое устройство
+          const now = new Date();
+          const newDevice: ExtendedDeviceInfo = {
+            id: authData.deviceId,
+            name: getBrowserInfo(),
+            browser: navigator.userAgent,
+            lastAccess: now.toLocaleString('ru'),
+            timestamp: now.getTime(),
+            source: sourceDevice
+          };
+          
+          // Обновляем или добавляем устройство
+          const existingDeviceIndex = devices.findIndex(d => d && d.id === authData.deviceId);
+          if (existingDeviceIndex !== -1 && devices[existingDeviceIndex]) {
+            const existingDevice = devices[existingDeviceIndex];
+            devices[existingDeviceIndex] = {
+              id: existingDevice.id,
+              name: existingDevice.name,
+              browser: existingDevice.browser,
+              lastAccess: now.toLocaleString('ru'),
+              timestamp: now.getTime(),
+              source: sourceDevice
+            };
+          } else {
+            // Проверяем лимит устройств
+            if (devices.length >= 5) {
+              // Находим самое старое устройство для замены
+              let oldestIdx = 0;
+              for (let i = 1; i < devices.length; i++) {
+                if (devices[i] && devices[oldestIdx] && devices[i].timestamp < devices[oldestIdx].timestamp) {
+                  oldestIdx = i;
+                }
+              }
+              devices[oldestIdx] = newDevice;
+            } else {
+              // Добавляем новое устройство
+              devices.push(newDevice);
             }
           }
           
-          // Показываем уведомление о замене устройства
-          showToast("Достигнут лимит устройств. Самое старое устройство было заменено.", 'info');
-          
-          devices[oldestIndex] = newDevice;
-        } else {
-          // Добавляем новое устройство
-          devices.push(newDevice);
-        }
-      }
-      
-      // Сохраняем обновленный список устройств
-      localStorage.setItem('samga-authorized-devices', JSON.stringify(devices));
-      
-      // Показываем сообщение об успешном входе и пытаемся выполнить вход
-      try {
-        // Для демо-режима (разработка) - имитируем успешный вход без реального API вызова
-        if (process.env.NODE_ENV === 'development' && authData.iin.startsWith('12345')) {
-          setLoginSuccess(true);
-          showToast("Устройство успешно авторизовано", 'success');
-          
-          setTimeout(() => {
-            window.location.href = '/';
-          }, 2000);
-          return;
+          localStorage.setItem('samga-authorized-devices', JSON.stringify(devices));
+        } catch (e) {
+          console.error('Ошибка при обновлении списка устройств:', e);
         }
         
-        // Реальный API вызов для продакшен
-        const result = await login(authData.iin, authData.password);
+        setLoginSuccess(true);
+        showToast("Вход выполнен успешно!", 'success');
         
-        if (result.success) {
-          setLoginSuccess(true);
-          showToast("Устройство успешно авторизовано", 'success');
-          
-          // Перенаправляем после короткой задержки
-          setTimeout(() => {
-            window.location.href = '/';
-          }, 2000);
-        } else {
-          const errorMsg = result.errors?.iin || result.errors?.password || 'Ошибка входа';
-          showToast(errorMsg, 'error');
-          setIsProcessing(false);
-          setQrScanning(true);
-        }
-      } catch (error: any) {
-        console.error('Ошибка при выполнении входа:', error);
-        showToast("Не удалось выполнить вход: " + (error.message || 'неизвестная ошибка'), 'error');
+        // Перенаправляем после короткой задержки
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 2000);
+      } else {
+        // Если вход не удался, показываем ошибку
+        const errorMsg = result.errors?.iin || result.errors?.password || 'Ошибка входа: неверный ИИН или пароль';
+        console.error('Ошибка входа:', errorMsg);
+        showToast(errorMsg, 'error');
         setIsProcessing(false);
-        setQrScanning(true);
+        setQrScanning(true); // Возобновляем сканирование
       }
-      
     } catch (error: any) {
       console.error('Ошибка при обработке данных авторизации:', error);
-      setNfcError(new Error('Не удалось авторизовать устройство: ' + (error.message || 'неизвестная ошибка')));
-      showToast("Не удалось авторизовать устройство", 'error');
+      showToast("Ошибка авторизации: " + (error.message || 'произошла неизвестная ошибка'), 'error');
       
-      // По завершении обработки в любом случае
-      setTimeout(() => {
-        setIsProcessing(false);
-        setQrScanning(true);
-        handleRescan(); // Сбрасываем всё для возможности нового сканирования
-      }, 2000);
+      // Сбрасываем состояние обработки
+      setIsProcessing(false);
+      setQrScanning(true);
     }
   };
   
