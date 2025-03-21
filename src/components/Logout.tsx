@@ -24,29 +24,23 @@ export const Logout = ({
 
   const handleLogout = () => {
     try {
-      // Устанавливаем флаг, что был выполнен выход
+      // Упрощенный процесс выхода без задержек
       localStorage.setItem('samga-logout-flag', 'true')
+      localStorage.setItem('samga-fast-reauth', 'true')
       
-      // Удаляем данные авторизации
-      localStorage.removeItem('user-iin')
-      localStorage.removeItem('user-password')
+      // Мгновенное уведомление
+      showToast('Выполняется выход...', 'info')
       
-      // Сохраняем ID устройства, но помечаем как требующее повторной авторизации
-      const deviceId = localStorage.getItem('samga-current-device-id')
-      if (deviceId) {
-        localStorage.setItem('device-needs-reauth', 'true')
-      }
-      
-      // Показываем уведомление
-      showToast('Вы успешно вышли из системы', 'info')
-      
-      // Переадресация на страницу входа
-      setTimeout(() => {
-        router.push(redirectPath)
-      }, 300)
+      // Немедленное перенаправление
+      window.location.href = redirectPath
     } catch (error) {
       console.error('Ошибка при выходе:', error)
       showToast('Ошибка при выходе из системы', 'error')
+      
+      // Запасной вариант при ошибке
+      setTimeout(() => {
+        window.location.href = redirectPath
+      }, 100)
     }
   }
 

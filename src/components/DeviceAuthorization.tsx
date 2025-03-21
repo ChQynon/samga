@@ -21,30 +21,78 @@ import {
   DialogHeader, 
   DialogTitle 
 } from '@/components/ui/dialog'
-import { Spinner, Trash, PhoneSlash, QrCode, CheckCircle, Warning } from '@phosphor-icons/react'
+import { Spinner, Trash, PhoneSlash, QrCode, CheckCircle, Warning, X } from '@phosphor-icons/react'
 import { Phone as Smartphone } from '@phosphor-icons/react'
 import { useToast } from '@/lib/providers/ToastProvider'
 import { QRCodeSVG } from 'qrcode.react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { cn } from '@/lib/utils'
 
 interface SourceDevice {
   name: string;
   id: string;
 }
 
+interface FormattedDevice extends DeviceInfo {
+  formattedTime?: string;
+  isCurrent?: boolean;
+}
+
 const DeviceAuthorization = () => {
-  const { authorizedDevices, revokeDevice, prepareAuthData, isCurrentDeviceShared, canAuthorizeOthers, remainingSlots } = useDeviceAuth()
-  const { isAvailable, startWriting, status, error } = useNFC()
+  const [showQrDialog, setShowQrDialog] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
+  const [showRevokeDialog, setShowRevokeDialog] = useState(false)
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<string>('qr')
   const { showToast } = useToast()
   
-  const [isNFCDialogOpen, setIsNFCDialogOpen] = useState(false)
-  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
-  const [authQrData, setAuthQrData] = useState<string>('')
-  const [activeTab, setActiveTab] = useState<string>(isAvailable ? 'nfc' : 'qr')
-  const [showSuccess, setShowSuccess] = useState(false)
+  const { 
+    authorizedDevices, 
+    remainingSlots,
+    authorizeDevice, 
+    revokeDevice, 
+    prepareAuthData 
+  } = useDeviceAuth()
+  
+  const { isAvailable, startWriting, status, error } = useNFC()
+  
   const [lastConnectedDevice, setLastConnectedDevice] = useState<DeviceInfo | null>(null)
   const [sourceDevice, setSourceDevice] = useState<SourceDevice | null>(null)
+  const [authQrData, setAuthQrData] = useState<string>('')
+  const [showSuccess, setShowSuccess] = useState(false)
+  
+  // Вспомогательная функция для форматирования времени
+  const formatTime = (timestamp?: number): string => {
+    if (!timestamp) return '';
+    
+    const date = new Date(timestamp);
+    return date.toLocaleDateString('ru-RU') + ' ' + date.toLocaleTimeString('ru-RU', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+  
+  // Форматирование списка устройств с добавлением признака текущего
+  const formatDeviceList = (devices: DeviceInfo[] | null): FormattedDevice[] => {
+    if (!devices) return [];
+    
+    // Получаем ID текущего устройства
+    const currentDeviceId = localStorage.getItem('samga-current-device-id');
+    
+    return devices.map(device => {
+      // Флаг текущего устройства
+      const isCurrent = device.id === currentDeviceId;
+      
+      return {
+        ...device,
+        formattedTime: formatTime(device.timestamp),
+        isCurrent // Добавляем признак текущего устройства
+      };
+    });
+  };
+  
+  // Получаем форматированный список устройств
+  const formattedDevices = formatDeviceList(authorizedDevices);
   
   // Начать процесс авторизации (общий метод)
   const handleStartAuth = async () => {
@@ -55,12 +103,12 @@ const DeviceAuthorization = () => {
     }
     
     // Если текущее устройство авторизовано через другое устройство, запрещаем авторизацию
-    if (!canAuthorizeOthers) {
+    if (!authorizeDevice) {
       showToast('Нельзя авторизовать другие устройства с устройства, которое само было авторизовано', 'error')
       return
     }
     
-    setIsNFCDialogOpen(true)
+    setShowQrDialog(true)
     setShowSuccess(false)
     setLastConnectedDevice(null)
     setSourceDevice(null)
@@ -100,7 +148,7 @@ const DeviceAuthorization = () => {
         }
       } else if (authData === 'limit_exceeded') {
         showToast(`Достигнут лимит в 5 устройств. Отзовите доступ у неиспользуемых устройств.`, 'error')
-        setIsNFCDialogOpen(false)
+        setShowQrDialog(false)
       } else {
         showToast('Не удалось подготовить данные для передачи. Возможно, вы не вошли в систему или не сохранили данные при входе.', 'error')
         // Не закрываем диалог, показываем сообщение об ошибке
@@ -115,7 +163,7 @@ const DeviceAuthorization = () => {
   
   // Получаем последнее добавленное устройство при обновлении списка устройств
   useEffect(() => {
-    if (authorizedDevices.length > 0 && isNFCDialogOpen) {
+    if (authorizedDevices.length > 0 && showQrDialog) {
       const lastDevice = authorizedDevices[authorizedDevices.length - 1]
       if (lastDevice) {
         setLastConnectedDevice(lastDevice)
@@ -135,12 +183,12 @@ const DeviceAuthorization = () => {
         }
       }
     }
-  }, [authorizedDevices, isNFCDialogOpen])
+  }, [authorizedDevices, showQrDialog])
   
   // Запрос на отзыв доступа
   const handleRequestRevoke = (deviceId: string) => {
     setSelectedDeviceId(deviceId)
-    setConfirmDialogOpen(true)
+    setShowRevokeDialog(true)
   }
   
   // Подтверждение отзыва доступа
@@ -153,7 +201,7 @@ const DeviceAuthorization = () => {
         showToast('Не удалось отозвать доступ устройства', 'error')
       }
     }
-    setConfirmDialogOpen(false)
+    setShowRevokeDialog(false)
     setSelectedDeviceId(null)
   }
   
@@ -168,7 +216,7 @@ const DeviceAuthorization = () => {
       </div>
       
       {/* Предупреждение для устройств, авторизованных через другие устройства */}
-      {!canAuthorizeOthers && (
+      {!authorizeDevice && (
         <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
           <p className="font-medium">Ограниченный доступ</p>
           <p className="mt-1">
@@ -196,46 +244,62 @@ const DeviceAuthorization = () => {
         </div>
       </div>
       
-      {/* Список авторизованных устройств */}
-      {authorizedDevices.length > 0 ? (
-        <div className="space-y-4">
-          {authorizedDevices.map((device) => (
-            <Card key={device.id}>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Smartphone className="h-5 w-5 text-primary" />
-                    <CardTitle className="text-base">{device.name}</CardTitle>
+      {/* Список устройств */}
+      <div className="space-y-2 mt-3">
+        {formattedDevices.length > 0 ? (
+          formattedDevices.map((device) => (
+            <div
+              key={device.id}
+              className={cn(
+                "relative flex items-center justify-between p-3 rounded-md shadow-sm",
+                device.isCurrent ? "bg-primary/10 border border-primary/30" : "bg-muted"
+              )}
+            >
+              <div className="flex items-center space-x-3">
+                {device.isCurrent && (
+                  <div className="absolute -left-1 -top-1 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+                    <span className="text-[10px] font-bold">ВЫ</span>
                   </div>
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    onClick={() => handleRequestRevoke(device.id)}
-                  >
-                    <PhoneSlash className="h-4 w-4 text-red-600" />
-                  </Button>
+                )}
+                <div className="p-2 rounded-full bg-background">
+                  <Smartphone size={24} />
                 </div>
-                <CardDescription className="text-xs">
-                  Последний вход: {device.lastAccess}
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <div className="rounded-lg border border-dashed p-6 text-center">
-          <p className="text-sm text-muted-foreground">
-            У вас нет авторизованных устройств.
-          </p>
-        </div>
-      )}
+                <div>
+                  <p className="text-sm font-medium">{device.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {device.isCurrent 
+                      ? "Текущее устройство" 
+                      : `Подключено: ${device.formattedTime || device.lastAccess || 'неизвестно'}`
+                    }
+                  </p>
+                </div>
+              </div>
+              
+              {!device.isCurrent && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  onClick={() => handleRequestRevoke(device.id)}
+                >
+                  <X size={16} />
+                </Button>
+              )}
+            </div>
+          ))
+        ) : (
+          <div className="p-4 text-center">
+            <p className="text-sm text-muted-foreground">Нет подключенных устройств</p>
+          </div>
+        )}
+      </div>
       
       {/* Кнопка для добавления нового устройства */}
       <div className="pt-4">
         <Button
           onClick={handleStartAuth}
           className="w-full"
-          disabled={!canAuthorizeOthers || remainingSlots <= 0}
+          disabled={!authorizeDevice || remainingSlots <= 0}
         >
           Авторизовать новое устройство
           {remainingSlots > 0 && <span className="ml-2 text-xs">({remainingSlots} из 5 доступно)</span>}
@@ -243,7 +307,7 @@ const DeviceAuthorization = () => {
       </div>
       
       {/* Диалог для авторизации */}
-      <Dialog open={isNFCDialogOpen} onOpenChange={setIsNFCDialogOpen}>
+      <Dialog open={showQrDialog} onOpenChange={setShowQrDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Авторизация устройства</DialogTitle>
@@ -375,7 +439,7 @@ const DeviceAuthorization = () => {
           )}
           
           <DialogFooter>
-            <Button variant="secondary" onClick={() => setIsNFCDialogOpen(false)}>
+            <Button variant="secondary" onClick={() => setShowQrDialog(false)}>
               {showSuccess ? 'Готово' : 'Закрыть'}
             </Button>
           </DialogFooter>
@@ -383,7 +447,7 @@ const DeviceAuthorization = () => {
       </Dialog>
       
       {/* Диалог подтверждения отзыва доступа */}
-      <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
+      <Dialog open={showRevokeDialog} onOpenChange={setShowRevokeDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Подтвердите действие</DialogTitle>
@@ -396,7 +460,7 @@ const DeviceAuthorization = () => {
           <DialogFooter className="gap-2 sm:justify-end">
             <Button 
               variant="secondary" 
-              onClick={() => setConfirmDialogOpen(false)}
+              onClick={() => setShowRevokeDialog(false)}
             >
               Отмена
             </Button>
