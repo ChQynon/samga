@@ -1,35 +1,28 @@
 'use client'
 
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
-import { useNFC, DeviceInfo } from '@/lib/hooks/useNFC'
+import { useNFC } from '@/lib/hooks/useNFC'
 import { useRouter } from 'next/navigation'
-import { Spinner, QrCode, ArrowsClockwise } from '@phosphor-icons/react'
+import { Spinner, ArrowsClockwise } from '@phosphor-icons/react'
 import QrScanner from 'react-qr-scanner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/lib/providers/ToastProvider'
 import { login } from '@/server/actions/login'
 
+// Простой интерфейс с минимумом необходимых полей
 interface AuthData {
   iin: string
   password: string
   deviceId: string
-  sourceDevice?: {
-    name: string
-    id: string
-  }
 }
 
-// Добавляем объявление для ToastProps
-interface ExtendedDeviceInfo extends DeviceInfo {
-  source?: {
-    name: string;
-    browser: string;
-    timestamp: number;
-  };
-}
+// Определяем режим разработки один раз
+const isDevelopment = typeof process !== 'undefined' && 
+  typeof process.env !== 'undefined' && 
+  process.env.NODE_ENV === 'development';
 
-// Функция для получения информации о браузере
+// Простая функция для получения информации о браузере
 const getBrowserInfo = (): string => {
   const userAgent = navigator.userAgent
   let browserName = 'Неизвестный браузер'
@@ -77,52 +70,15 @@ const NFCLogin = () => {
   const { showToast } = useToast()
   const router = useRouter()
   
+  // Упрощенный набор состояний
   const [isProcessing, setIsProcessing] = useState(false)
   const [activeTab, setActiveTab] = useState<string>(isAvailable ? 'nfc' : 'qr')
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment')
   const [scannerKey, setScannerKey] = useState(0)
-  const [scanAnimation, setScanAnimation] = useState(false)
-  const [lastScannedData, setLastScannedData] = useState<string | null>(null)
   const [loginSuccess, setLoginSuccess] = useState(false)
   const [nfcError, setNfcError] = useState<Error | null>(null)
-  const [qrScanning, setQrScanning] = useState(false)
   
-  // Анимация сканера
-  const scannerRef = useRef<HTMLDivElement>(null)
-  
-  // Заменяем проверку режима разработки во всём файле
-  const isDevelopment = typeof process !== 'undefined' && 
-    typeof process.env !== 'undefined' && 
-    process.env.NODE_ENV === 'development';
-  
-  // Установка интервала для проверки и демонстрационного режима
-  useEffect(() => {
-    // В режиме разработки для QR-кода
-    if (isDevelopment && activeTab === 'qr' && !isProcessing && qrScanning) {
-      const demoTimer = setTimeout(() => {
-        console.log('Демонстрационный режим: Симуляция сканирования QR-кода');
-        const testData = generateTestData();
-        handleAuthData(testData);
-      }, 5000);
-      
-      return () => clearTimeout(demoTimer);
-    }
-    
-    // В режиме разработки для NFC
-    if (isDevelopment && activeTab === 'nfc' && status === 'reading') {
-      const demoTimer = setTimeout(() => {
-        console.log('Демонстрационный режим: Симуляция считывания NFC');
-        const testData = generateTestData();
-        const event = new CustomEvent('nfc-auth-data', { 
-          detail: testData 
-        });
-        window.dispatchEvent(event);
-      }, 5000);
-      
-      return () => clearTimeout(demoTimer);
-    }
-  }, [activeTab, status, isProcessing, qrScanning]);
-  
+  // Эффект для обработки переключения вкладок
   useEffect(() => {
     // Если NFC недоступен, переключаемся на вкладку QR
     if (!isAvailable && activeTab === 'nfc') {
@@ -140,336 +96,224 @@ const NFCLogin = () => {
     }
   }, [isAvailable, activeTab, status, error])
   
-  // Запускаем анимацию сканера
+  // Упрощенный режим демонстрации для разработки
   useEffect(() => {
-    if (activeTab === 'qr' && !isProcessing) {
-      setScanAnimation(true)
-      // Устанавливаем состояние сканирования для QR
-      setQrScanning(true)
-    } else {
-      setScanAnimation(false)
-      setQrScanning(false)
+    if (isDevelopment && activeTab === 'nfc' && status === 'reading') {
+      const demoTimer = setTimeout(() => {
+        console.log('Демо: NFC считан');
+        const testData = generateTestData();
+        // Создаем событие для эмуляции чтения NFC
+        const event = new CustomEvent('nfc-auth-data', { 
+          detail: testData 
+        });
+        window.dispatchEvent(event);
+      }, 3000);
+      
+      return () => clearTimeout(demoTimer);
     }
-  }, [activeTab, isProcessing])
+  }, [activeTab, status]);
   
-  // Обработчик для NFC событий
+  // Обработчик для NFC событий - упрощенная версия
   useEffect(() => {
     const handleNFCAuthData = (event: Event) => {
-      const customEvent = event as CustomEvent<any>
+      const customEvent = event as CustomEvent<AuthData>;
       if (customEvent.detail) {
-        console.log('Получены данные от NFC:', customEvent.detail);
         try {
-          // Проверяем, содержит ли объект все необходимые данные
           const authData = customEvent.detail;
-          if (!authData.iin || !authData.password || !authData.deviceId) {
-            throw new Error('Неполные данные для авторизации');
-          }
+          console.log('NFC данные получены:', authData);
           handleAuthData(authData);
         } catch (error) {
           console.error('Ошибка обработки NFC данных:', error);
           showToast('Ошибка обработки NFC данных', 'error');
         }
       }
-    }
+    };
     
-    window.addEventListener('nfc-auth-data', handleNFCAuthData)
-    
+    window.addEventListener('nfc-auth-data', handleNFCAuthData);
     return () => {
-      window.removeEventListener('nfc-auth-data', handleNFCAuthData)
-    }
-  }, [])
+      window.removeEventListener('nfc-auth-data', handleNFCAuthData);
+    };
+  }, []);
   
-  // Запуск чтения NFC
+  // Запуск чтения NFC - упрощенный
   const handleStartNFCReading = async () => {
     try {
-      setIsProcessing(false) // Сбрасываем состояние для возможности повторного сканирования
-      setLastScannedData(null)
+      setIsProcessing(false)
       setNfcError(null)
-      console.log('Начинаем чтение NFC...');
       await startReading()
       showToast('NFC сканирование активировано', 'info')
     } catch (e) {
-      console.error('Ошибка при запуске чтения NFC:', e)
-      showToast('Не удалось запустить чтение NFC', 'error')
+      console.error('Ошибка при запуске NFC:', e)
+      showToast('Не удалось запустить NFC', 'error')
     }
   }
   
-  // Обновленный обработчик сканирования QR-кода
+  // Упрощенная обработка QR кода
   const handleScan = useCallback(
     (data: { text: string } | null) => {
-      if (data && data.text && !isProcessing && data.text !== lastScannedData) {
-        setLastScannedData(data.text); // Сохраняем последние сканированные данные
-        
+      if (data && data.text && !isProcessing) {
+        console.log('QR-код считан:', data.text);
         try {
-          console.log('QR-код считан, данные:', data.text);
-          
-          // Проверяем, возможно это просто строка без JSON формата
+          // Простая обработка разных форматов
           let authData: AuthData;
           
+          // Пробуем как JSON
           try {
-            // Пробуем распарсить JSON
             authData = JSON.parse(data.text);
-          } catch (parseError) {
-            // Если не JSON, пытаемся проверить другие форматы
-            // Формат может быть simple: iin:password:deviceId
-            const parts = data.text.split(':');
+          } catch {
+            // Если не JSON, пробуем как разделенную строку
+            const parts = data.text.split(/[:\s,-_]/);
             if (parts.length >= 2) {
-              // Безопасный доступ к элементам массива с значениями по умолчанию
-              const iin = parts[0] || '';
-              const password = parts[1] || '';
-              const deviceId = parts[2] || `device-${Date.now().toString()}`;
-              
               authData = {
-                iin,
-                password,
-                deviceId
+                iin: parts[0] || '',
+                password: parts[1] || '',
+                deviceId: parts[2] || `device-${Date.now()}`
+              };
+            } else if (data.text.length >= 12) {
+              // Если длинная строка, попробуем разделить на ИИН и пароль
+              authData = {
+                iin: data.text.substring(0, 12),
+                password: data.text.substring(12) || 'defaultPassword',
+                deviceId: `device-${Date.now()}`
               };
             } else {
-              // Если текст не содержит ':' и не является JSON, 
-              // проверяем, возможно это просто ИИН и пароль через пробел или другие разделители
-              const cleanText = data.text.trim().replace(/[\s,-_]/g, ':');
-              const altParts = cleanText.split(':');
-              
-              if (altParts.length >= 2) {
-                authData = {
-                  iin: altParts[0] || '',
-                  password: altParts[1] || '',
-                  deviceId: `device-${Date.now().toString()}`
-                };
-              } else if (data.text.length >= 12) {
-                // Если длина строки достаточна для ИИН (12 символов), 
-                // предполагаем что это ИИН, а остальное пароль
-                authData = {
-                  iin: data.text.substring(0, 12),
-                  password: data.text.substring(12) || 'defaultPassword',
-                  deviceId: `device-${Date.now().toString()}`
-                };
-              } else {
-                throw new Error('Формат QR-кода не распознан. Требуется формат JSON или iin:password');
-              }
+              throw new Error('Неверный формат QR-кода');
             }
           }
           
-          // Проверяем наличие необходимых данных
+          // Проверяем минимальные требования
           if (!authData.iin || !authData.password) {
-            throw new Error('QR-код не содержит необходимых данных ИИН и пароля для авторизации');
+            throw new Error('QR-код не содержит необходимых данных');
           }
           
-          // Добавляем deviceId если не передан
-          if (!authData.deviceId) {
-            authData.deviceId = `device-${Date.now().toString()}`;
-          }
-          
-          console.log('Данные QR-кода успешно распознаны, ИИН:', authData.iin, 'ID:', authData.deviceId);
-          
-          // Показываем уведомление об успешном сканировании
-          showToast('QR-код успешно считан! Выполняем авторизацию...', 'success');
-          
-          // Обрабатываем полученные данные
+          showToast('QR-код успешно считан', 'success');
           handleAuthData(authData);
         } catch (error: any) {
-          // В режиме разработки для демонстрации
+          // В режиме разработки создаем тестовые данные
           if (isDevelopment) {
-            console.log('Режим разработки: Создаем тестовые данные для авторизации');
-            const testData = generateTestData();
-            handleAuthData(testData);
+            console.log('Демо: создаем тестовые данные');
+            handleAuthData(generateTestData());
             return;
           }
           
-          // Для разработки отображаем полное сообщение об ошибке
-          const errorMsg = isDevelopment 
-            ? `Ошибка сканирования: ${error.message}. Данные: ${data.text}`
-            : 'Ошибка при сканировании QR-кода. Проверьте формат и попробуйте снова.';
-          
-          console.error('Ошибка сканирования QR-кода:', error);
-          setNfcError(new Error(errorMsg));
-          showToast(errorMsg, 'error');
-          
-          // Сбрасываем сканированные данные для следующей попытки
-          setTimeout(() => {
-            setLastScannedData(null);
-          }, 1000);
+          console.error('Ошибка QR:', error);
+          setNfcError(new Error('Ошибка при сканировании QR-кода'));
+          showToast('Ошибка при сканировании QR-кода', 'error');
         }
       }
     },
-    [isProcessing, showToast, isDevelopment, lastScannedData]
+    [isProcessing, showToast]
   );
   
-  // Обработка ошибки сканера
+  // Обработка ошибок QR-сканера
   const handleError = (err: any) => {
-    console.error('Ошибка сканера QR-кода:', err)
+    console.error('Ошибка QR-сканера:', err);
     if (err && err.name !== 'NotAllowedError') {
-      // NotAllowedError происходит при отмене доступа к камере, не показываем уведомление в этом случае
-      showToast(`Ошибка сканера: ${err.message || 'Неизвестная ошибка'}`, 'error')
+      showToast(`Ошибка сканера: ${err.message || 'Неизвестная ошибка'}`, 'error');
     }
-  }
+  };
   
-  // Обновленная функция обработки данных аутентификации
+  // Основная функция авторизации - упрощенная и надежная
   const handleAuthData = async (authData: AuthData) => {
-    console.log('Начинаем обработку данных аутентификации:', JSON.stringify(authData));
+    console.log('Начинаем вход:', authData.iin);
     setIsProcessing(true);
-    setQrScanning(false);
     
     try {
-      // Получаем данные текущего устройства
-      const sourceDevice = {
-        name: getBrowserInfo(),
-        browser: navigator.userAgent,
-        timestamp: new Date().getTime()
-      };
-      
-      // Сохраняем данные для авторизации
+      // Сохраняем базовые данные
       localStorage.setItem('user-iin', authData.iin);
       localStorage.setItem('user-password', authData.password);
       localStorage.setItem('samga-current-device-id', authData.deviceId);
       
-      // Устанавливаем исходное устройство
-      try {
-        if (typeof window !== 'undefined') {
-          // Сохраняем информацию о источнике авторизации
-          const source = {
-            name: getBrowserInfo(),
-            id: `src-${Date.now().toString()}`
-          };
-          localStorage.setItem('samga-auth-source', JSON.stringify(source));
-        }
-      } catch (e) {
-        console.warn('Не удалось сохранить данные об источнике:', e);
-      }
-      
-      showToast('Данные получены, выполняем авторизацию...', 'info');
-      
-      // Оптимизация для демонстрационного режима - если нужно
+      // Демо-режим для быстрого входа
       if (isDevelopment) {
         setLoginSuccess(true);
-        showToast("Устройство успешно авторизовано", 'success');
-        
-        setTimeout(() => {
-          window.location.href = '/';
-        }, 2000);
+        showToast("Вход выполнен успешно!", 'success');
+        setTimeout(() => window.location.href = '/', 1500);
         return;
       }
       
-      // Реальный API вызов для продакшен
-      console.log('Вызываем API для входа с ИИН:', authData.iin);
+      // Выполняем вход
       const result = await login(authData.iin, authData.password);
-      console.log('Результат API входа:', result);
       
       if (result.success) {
-        // Обновляем список авторизованных устройств
+        // Сохраняем информацию о новом устройстве
         try {
-          let devices: ExtendedDeviceInfo[] = [];
+          let devices = [];
           const storedDevices = localStorage.getItem('samga-authorized-devices');
           if (storedDevices) {
             devices = JSON.parse(storedDevices);
           }
           
-          // Создаем новое устройство
-          const now = new Date();
-          const newDevice: ExtendedDeviceInfo = {
+          // Простой объект устройства
+          const newDevice = {
             id: authData.deviceId,
             name: getBrowserInfo(),
-            browser: navigator.userAgent,
-            lastAccess: now.toLocaleString('ru'),
-            timestamp: now.getTime(),
-            source: sourceDevice
+            lastAccess: new Date().toLocaleString('ru'),
+            timestamp: Date.now()
           };
           
-          // Обновляем или добавляем устройство
-          const existingDeviceIndex = devices.findIndex(d => d && d.id === authData.deviceId);
-          if (existingDeviceIndex !== -1 && devices[existingDeviceIndex]) {
-            const existingDevice = devices[existingDeviceIndex];
-            devices[existingDeviceIndex] = {
-              id: existingDevice.id,
-              name: existingDevice.name,
-              browser: existingDevice.browser,
-              lastAccess: now.toLocaleString('ru'),
-              timestamp: now.getTime(),
-              source: sourceDevice
-            };
+          // Проверяем существование устройства
+          const existingIndex = devices.findIndex((d: any) => d && d.id === authData.deviceId);
+          if (existingIndex !== -1) {
+            devices[existingIndex] = newDevice;
           } else {
-            // Проверяем лимит устройств
+            // Ограничение на 5 устройств
             if (devices.length >= 5) {
-              // Находим самое старое устройство для замены
-              let oldestIdx = 0;
-              let oldestTimestamp = Number.MAX_SAFE_INTEGER;
-              
-              // Проходим по всем устройствам и ищем с самым старым timestamp
-              for (let i = 0; i < devices.length; i++) {
-                const device = devices[i];
-                if (device && typeof device.timestamp === 'number' && device.timestamp < oldestTimestamp) {
-                  oldestTimestamp = device.timestamp;
-                  oldestIdx = i;
-                }
-              }
-              
-              // Заменяем самое старое устройство
-              devices[oldestIdx] = newDevice;
+              // Находим и заменяем самое старое
+              devices.sort((a: any, b: any) => a.timestamp - b.timestamp);
+              devices[0] = newDevice;
             } else {
-              // Добавляем новое устройство
               devices.push(newDevice);
             }
           }
           
           localStorage.setItem('samga-authorized-devices', JSON.stringify(devices));
         } catch (e) {
-          console.error('Ошибка при обновлении списка устройств:', e);
+          console.warn('Не удалось обновить список устройств:', e);
         }
         
         setLoginSuccess(true);
         showToast("Вход выполнен успешно!", 'success');
-        
-        // Перенаправляем после короткой задержки
-        setTimeout(() => {
-          window.location.href = '/';
-        }, 2000);
+        setTimeout(() => window.location.href = '/', 1500);
       } else {
-        // Если вход не удался, показываем ошибку
-        const errorMsg = result.errors?.iin || result.errors?.password || 'Ошибка входа: неверный ИИН или пароль';
-        console.error('Ошибка входа:', errorMsg);
+        // Ошибка входа
+        const errorMsg = result.errors?.iin || result.errors?.password || 'Ошибка входа';
         showToast(errorMsg, 'error');
         setIsProcessing(false);
-        setQrScanning(true); // Возобновляем сканирование
-        setLastScannedData(null); // Сбрасываем сканированные данные
       }
     } catch (error: any) {
-      console.error('Ошибка при обработке данных авторизации:', error);
-      showToast("Ошибка авторизации: " + (error.message || 'произошла неизвестная ошибка'), 'error');
-      
-      // Сбрасываем состояние обработки
+      console.error('Ошибка авторизации:', error);
+      showToast("Ошибка авторизации", 'error');
       setIsProcessing(false);
-      setQrScanning(true);
-      setLastScannedData(null); // Сбрасываем сканированные данные
     }
   };
   
   // Переключение камеры
   const handleToggleCamera = () => {
-    setFacingMode(facingMode === 'environment' ? 'user' : 'environment')
-    setScannerKey(prev => prev + 1) // Обновляем ключ для пересоздания компонента сканера
-    showToast(`Переключение на ${facingMode === 'environment' ? 'фронтальную' : 'основную'} камеру...`, 'info')
-  }
+    setFacingMode(facingMode === 'environment' ? 'user' : 'environment');
+    setScannerKey(prev => prev + 1);
+    showToast(`Переключение камеры`, 'info');
+  };
   
   // Повторное сканирование
   const handleRescan = () => {
-    setIsProcessing(false)
-    setLastScannedData(null)
-    setNfcError(null)
+    setIsProcessing(false);
+    setNfcError(null);
+    
     if (activeTab === 'nfc') {
-      handleStartNFCReading()
+      handleStartNFCReading();
     } else {
-      setQrScanning(true)
-      setScannerKey(prev => prev + 1)
-      showToast('Сканирование перезапущено', 'info')
+      setScannerKey(prev => prev + 1);
+      showToast('Сканирование перезапущено', 'info');
     }
-  }
+  };
   
   return (
     <div className="rounded-md border p-6 space-y-4 max-w-lg mx-auto">
       <div className="text-center mb-4">
         <h2 className="text-lg font-medium">Вход с помощью другого устройства</h2>
         <p className="text-sm text-muted-foreground">
-          Используйте авторизованное устройство для быстрого входа в систему.
+          Используйте авторизованное устройство для быстрого входа.
         </p>
       </div>
       
@@ -490,11 +334,6 @@ const NFCLogin = () => {
                   <p className="mt-4 text-center text-sm text-muted-foreground">
                     Поднесите устройство к другому телефону...
                   </p>
-                  {process.env.NODE_ENV === 'development' && (
-                    <p className="mt-2 text-xs text-blue-500">
-                      [Демо режим: ожидание 5 секунд для симуляции]
-                    </p>
-                  )}
                 </>
               ) : isProcessing ? (
                 <>
@@ -540,9 +379,7 @@ const NFCLogin = () => {
             
             {nfcError && (
               <div className="mt-4 text-center">
-                <p className="text-sm text-red-600">
-                  {nfcError.message}
-                </p>
+                <p className="text-sm text-red-600">{nfcError.message}</p>
                 <Button 
                   variant="outline" 
                   size="sm"
@@ -570,7 +407,7 @@ const NFCLogin = () => {
                     <ArrowsClockwise className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="overflow-hidden rounded-md" ref={scannerRef}>
+                <div className="overflow-hidden rounded-md">
                   <QrScanner
                     key={scannerKey}
                     delay={300}
@@ -578,37 +415,28 @@ const NFCLogin = () => {
                     onScan={handleScan}
                     constraints={{
                       video: {
-                        facingMode: facingMode,
+                        facingMode: facingMode
                       }
                     }}
                     style={{ width: '100%', height: '300px' }}
                   />
                   
-                  {/* Анимированная голубая линия */}
+                  {/* Голубая анимационная линия сканирования */}
                   <div className="absolute inset-0 pointer-events-none">
-                    {scanAnimation && (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        {/* Анимированная линия с изменением цвета */}
-                        <div 
-                          className="absolute w-full h-1 opacity-70"
-                          style={{
-                            animation: 'qrScanAnimation 2s cubic-bezier(0.4, 0, 0.2, 1) infinite, colorChange 5s infinite',
-                            background: 'linear-gradient(90deg, rgba(59,130,246,0.8) 0%, rgba(37,99,235,1) 100%)',
-                            boxShadow: '0 0 12px rgba(59,130,246,0.5)'
-                          }}
-                        ></div>
-                      </div>
-                    )}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div
+                        className="absolute w-full h-2 opacity-70"
+                        style={{
+                          animation: 'qrScanAnimation 2s ease-in-out infinite',
+                          background: 'linear-gradient(90deg, #3b82f6 0%, #2563eb 100%)'
+                        }}
+                      ></div>
+                    </div>
                   </div>
                 </div>
                 <p className="mt-4 text-center text-sm text-muted-foreground">
                   {facingMode === 'user' ? 'Используется фронтальная камера' : 'Используется основная камера'}
                 </p>
-                {process.env.NODE_ENV === 'development' && qrScanning && (
-                  <p className="mt-2 text-center text-xs text-blue-500">
-                    [Демо режим: ожидание 5 секунд для симуляции сканирования]
-                  </p>
-                )}
               </>
             ) : (
               <div className="h-48 flex flex-col items-center justify-center">
@@ -645,9 +473,7 @@ const NFCLogin = () => {
               </p>
               {nfcError && (
                 <div className="mt-4">
-                  <p className="text-sm text-red-600">
-                    {nfcError.message}
-                  </p>
+                  <p className="text-sm text-red-600">{nfcError.message}</p>
                   <Button 
                     variant="outline" 
                     size="sm"
@@ -663,41 +489,25 @@ const NFCLogin = () => {
         </TabsContent>
       </Tabs>
       
-      <p className="text-center text-xs text-muted-foreground">
-        Для использования этого метода входа необходимо предварительно авторизовать устройство в настройках аккаунта.
-      </p>
-      
-      {process.env.NODE_ENV === 'development' && (
+      {isDevelopment && !isProcessing && (
         <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-          <p className="text-xs text-blue-800 mb-2 font-medium">Демонстрационный режим</p>
-          <p className="text-xs text-blue-600">
-            В данном режиме разработки имитируется успешное сканирование через 5 секунд.
-            В реальной среде необходимо сканировать настоящий QR-код или использовать NFC.
-          </p>
+          <p className="text-xs text-blue-800 mb-1 font-medium">Демо-режим</p>
           <Button 
             variant="outline" 
             size="sm"
-            className="mt-2 w-full"
+            className="mt-1 w-full"
             onClick={() => handleAuthData(generateTestData())}
           >
-            Симулировать успешное подключение устройства
+            Симулировать успешный вход
           </Button>
         </div>
       )}
       
-      {/* Добавляем стили для анимации сканирования и изменения цвета */}
       <style jsx global>{`
         @keyframes qrScanAnimation {
-          0% { transform: translateY(-50px); }
-          50% { transform: translateY(50px); }
-          100% { transform: translateY(-50px); }
-        }
-        
-        @keyframes colorChange {
-          0% { filter: hue-rotate(0deg); }
-          33% { filter: hue-rotate(60deg); }
-          66% { filter: hue-rotate(120deg); }
-          100% { filter: hue-rotate(0deg); }
+          0% { transform: translateY(-150px); }
+          50% { transform: translateY(150px); }
+          100% { transform: translateY(-150px); }
         }
       `}</style>
     </div>
