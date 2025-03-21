@@ -213,9 +213,9 @@ const NFCLogin = () => {
             const parts = data.text.split(':');
             if (parts.length >= 2) {
               // Безопасный доступ к элементам массива с значениями по умолчанию
-              const iin = parts[0] ?? '';
-              const password = parts[1] ?? '';
-              const deviceId = parts[2] ?? `device-${Date.now().toString()}`;
+              const iin = parts[0] || '';
+              const password = parts[1] || '';
+              const deviceId = parts[2] || `device-${Date.now().toString()}`;
               
               authData = {
                 iin,
@@ -223,7 +223,28 @@ const NFCLogin = () => {
                 deviceId
               };
             } else {
-              throw new Error('Формат QR-кода не распознан. Требуется формат JSON или iin:password');
+              // Если текст не содержит ':' и не является JSON, 
+              // проверяем, возможно это просто ИИН и пароль через пробел или другие разделители
+              const cleanText = data.text.trim().replace(/[\s,-_]/g, ':');
+              const altParts = cleanText.split(':');
+              
+              if (altParts.length >= 2) {
+                authData = {
+                  iin: altParts[0] || '',
+                  password: altParts[1] || '',
+                  deviceId: `device-${Date.now().toString()}`
+                };
+              } else if (data.text.length >= 12) {
+                // Если длина строки достаточна для ИИН (12 символов), 
+                // предполагаем что это ИИН, а остальное пароль
+                authData = {
+                  iin: data.text.substring(0, 12),
+                  password: data.text.substring(12) || 'defaultPassword',
+                  deviceId: `device-${Date.now().toString()}`
+                };
+              } else {
+                throw new Error('Формат QR-кода не распознан. Требуется формат JSON или iin:password');
+              }
             }
           }
           
@@ -246,7 +267,7 @@ const NFCLogin = () => {
           handleAuthData(authData);
         } catch (error: any) {
           // В режиме разработки для демонстрации
-          if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+          if (isDevelopment) {
             console.log('Режим разработки: Создаем тестовые данные для авторизации');
             const testData = generateTestData();
             handleAuthData(testData);
@@ -264,7 +285,7 @@ const NFCLogin = () => {
         }
       }
     },
-    [isProcessing, showToast]
+    [isProcessing, showToast, isDevelopment]
   );
   
   // Обработка ошибки сканера
@@ -526,42 +547,32 @@ const NFCLogin = () => {
                     <ArrowsClockwise className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="overflow-hidden rounded-md border" ref={scannerRef}>
+                <div className="overflow-hidden rounded-md" ref={scannerRef}>
                   <QrScanner
-                    key={scannerKey} // Важно для переключения камеры
+                    key={scannerKey}
                     delay={300}
                     onError={handleError}
                     onScan={handleScan}
                     constraints={{
                       video: {
-                        facingMode: facingMode
+                        facingMode: facingMode,
                       }
                     }}
-                    style={{ width: '100%', height: '100%' }}
+                    style={{ width: '100%', height: '300px' }}
                   />
                   
-                  {/* Анимированный сканер */}
+                  {/* Заменяем анимированный сканер на более простой, без рамок */}
                   <div className="absolute inset-0 pointer-events-none">
                     {scanAnimation && (
                       <div className="absolute inset-0 flex items-center justify-center">
-                        {/* Внешняя рамка */}
-                        <div className="absolute w-64 h-64 border-2 border-primary rounded-md"></div>
-                        
-                        {/* Сканирующая линия */}
+                        {/* Только сканирующая линия - без рамок */}
                         <div 
-                          className="absolute w-64 h-1 bg-primary/80 opacity-75 rounded-full shadow-lg shadow-primary/50"
+                          className="absolute w-full h-1 bg-primary/70 opacity-50"
                           style={{
                             animation: 'qrScanAnimation 2s cubic-bezier(0.4, 0, 0.2, 1) infinite',
+                            boxShadow: '0 0 10px rgba(0, 0, 0, 0.1)'
                           }}
                         ></div>
-                        
-                        {/* Углы рамки */}
-                        <div className="absolute w-64 h-64">
-                          <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-primary"></div>
-                          <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-primary"></div>
-                          <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-primary"></div>
-                          <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-primary"></div>
-                        </div>
                       </div>
                     )}
                   </div>
