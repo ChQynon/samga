@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { useNFC } from '@/lib/hooks/useNFC'
-import { Spinner, X, QrCode } from '@phosphor-icons/react'
+import { Spinner, X, QrCode, ArrowsClockwise, Camera } from '@phosphor-icons/react'
 import {
   Dialog,
   DialogContent,
@@ -31,6 +31,7 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<string>(isAvailable ? 'nfc' : 'qr')
   const [scanError, setScanError] = useState<string | null>(null)
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment')
   
   // Обработчик события получения данных через NFC
   useEffect(() => {
@@ -99,6 +100,11 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
     setScanError('Ошибка сканирования QR-кода')
   }
   
+  // Переключение камеры
+  const toggleCamera = () => {
+    setFacingMode(facingMode === 'environment' ? 'user' : 'environment')
+  }
+  
   return (
     <>
       <div className="mt-6 flex justify-center">
@@ -158,13 +164,26 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
             )}
             
             <TabsContent value="qr" className="flex flex-col items-center justify-center py-6">
-              <div className="w-full max-w-[300px] h-[250px] mx-auto bg-gray-100 rounded-lg overflow-hidden">
-                <QrScanner
-                  delay={300}
-                  onError={handleQrError}
-                  onScan={handleQrScan}
-                  style={{ width: '100%', height: '100%' }}
-                />
+              <div className="relative w-full max-w-[300px] mx-auto">
+                <div className="relative h-[250px] bg-gray-100 rounded-lg overflow-hidden">
+                  <QrScanner
+                    delay={300}
+                    onError={handleQrError}
+                    onScan={handleQrScan}
+                    style={{ width: '100%', height: '100%' }}
+                    facingMode={facingMode}
+                  />
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="absolute top-2 right-2 z-10 bg-white/80 backdrop-blur-sm"
+                  onClick={toggleCamera}
+                  title="Переключить камеру"
+                >
+                  <Camera className="h-4 w-4" />
+                </Button>
               </div>
               
               {scanError && (
@@ -175,6 +194,8 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
               
               <p className="mt-4 text-center text-sm text-muted-foreground">
                 Наведите камеру на QR-код на экране авторизованного устройства
+                <br />
+                <span className="text-xs">{facingMode === 'environment' ? 'Используется основная камера' : 'Используется фронтальная камера'}</span>
               </p>
             </TabsContent>
           </Tabs>
