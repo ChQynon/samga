@@ -1,5 +1,10 @@
 import { Metadata } from 'next'
-import PrivacyPolicyContent from '@/components/pages/PrivacyPolicyContent'
+import dynamic from 'next/dynamic'
+
+// Используем динамический импорт для клиентского компонента
+const PrivacyPolicyContent = dynamic(() => import('@/components/pages/PrivacyPolicyContent'), {
+  ssr: true,
+})
 
 export const metadata: Metadata = {
   title: 'Политика конфиденциальности | samga.nis',

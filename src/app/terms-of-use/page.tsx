@@ -1,5 +1,10 @@
 import { Metadata } from 'next'
-import TermsOfUseContent from '@/components/pages/TermsOfUseContent'
+import dynamic from 'next/dynamic'
+
+// Используем динамический импорт для клиентского компонента
+const TermsOfUseContent = dynamic(() => import('@/components/pages/TermsOfUseContent'), {
+  ssr: true,
+})
 
 export const metadata: Metadata = {
   title: 'Условия использования | samga.nis',
