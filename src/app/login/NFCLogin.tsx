@@ -191,38 +191,54 @@ const NFCLogin = () => {
       // УНИВЕРСАЛЬНЫЙ ПАРСЕР QR-КОДА
       let authData: AuthData;
       
-      // Метод 1: Попытка JSON
+      // Метод 1: Новый формат с разделителем "|"
       try {
-        authData = JSON.parse(data.text);
-        console.log('Успешный парсинг JSON');
+        const parts = data.text.split('|');
+        if (parts.length >= 3) {
+          authData = {
+            iin: parts[0]?.trim() || '000000000000',
+            password: parts[1]?.trim() || 'defaultpass',
+            deviceId: parts[2]?.trim() || `qr-${Date.now()}`,
+          };
+          console.log('Успешный парсинг нового формата с разделителем |');
+        } else {
+          // Если не подходит под новый формат, переходим к другим методам
+          throw new Error('Не соответствует новому формату');
+        }
       } catch {
-        // Метод 2: Разбор строки с разделителями
+        // Метод 2: Попытка JSON
         try {
-          const parts = data.text.split(/[:\s,-_|]/);
-          console.log('Разделение на части:', parts);
-          
-          if (parts.length >= 2) {
+          authData = JSON.parse(data.text);
+          console.log('Успешный парсинг JSON');
+        } catch {
+          // Метод 3: Разбор строки с другими разделителями
+          try {
+            const parts = data.text.split(/[:\s,-_]/);
+            console.log('Разделение на части:', parts);
+            
+            if (parts.length >= 2) {
+              authData = {
+                iin: parts[0]?.trim() || '000000000000',
+                password: parts[1]?.trim() || 'qrpass',
+                deviceId: `qr-${Date.now()}`
+              };
+            } else {
+              // Метод 4: Использование как единой строки (макс. 12 символов как ИИН)
+              authData = {
+                iin: data.text.substring(0, Math.min(12, data.text.length)).trim(),
+                password: data.text.length > 12 ? data.text.substring(12).trim() : 'qrcode',
+                deviceId: `qr-${Date.now()}`
+              };
+            }
+          } catch (e) {
+            // Метод 5: Крайний случай - используем любые данные
+            console.warn('Нестандартный QR, используем как есть:', e);
             authData = {
-              iin: parts[0]?.trim() || '000000000000',
-              password: parts[1]?.trim() || 'qrpass',
-              deviceId: `qr-${Date.now()}`
-            };
-          } else {
-            // Метод 3: Использование как единой строки (макс. 12 символов как ИИН)
-            authData = {
-              iin: data.text.substring(0, Math.min(12, data.text.length)).trim(),
-              password: data.text.length > 12 ? data.text.substring(12).trim() : 'qrcode',
-              deviceId: `qr-${Date.now()}`
+              iin: data.text.replace(/\D/g, '').substring(0, 12) || '000000000000',
+              password: 'qrany',
+              deviceId: `qr-fallback-${Date.now()}`
             };
           }
-        } catch (e) {
-          // Метод 4: Крайний случай - используем любые данные
-          console.warn('Нестандартный QR, используем как есть:', e);
-          authData = {
-            iin: data.text.replace(/\D/g, '').substring(0, 12) || '000000000000',
-            password: 'qrany',
-            deviceId: `qr-fallback-${Date.now()}`
-          };
         }
       }
       

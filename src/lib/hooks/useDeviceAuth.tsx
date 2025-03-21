@@ -248,18 +248,30 @@ export const useDeviceAuth = (): DeviceAuthHook => {
       
       // Формируем данные для передачи
       const authData = {
-        iin,
+        iin, 
         password,
-        deviceId: deviceId,
+        deviceId,
         sourceDevice: {
           name: getBrowserInfo(),
           id: mainDeviceId || 'unknown'
         }
       }
       
-      return JSON.stringify(authData)
+      // В разработке сохраняем информацию об устройстве-источнике для демонстрации
+      if (process.env.NODE_ENV === 'development') {
+        localStorage.setItem('last-auth-source', JSON.stringify({
+          sourceDevice: {
+            name: getBrowserInfo(),
+            id: mainDeviceId || 'unknown'
+          }
+        }))
+      }
+      
+      // Для повышения надежности чтения QR-кода используем более компактный формат данных
+      // и разделяем значения символом "|" вместо создания JSON-объекта
+      return `${iin}|${password}|${deviceId}|${getBrowserInfo()}|${mainDeviceId || 'unknown'}`;
     } catch (e) {
-      console.error('Ошибка при подготовке данных аутентификации:', e)
+      console.error('Ошибка при подготовке данных для авторизации:', e)
       return ''
     }
   }, [isCurrentDeviceShared, authorizedDevices.length, mainDeviceId])
@@ -303,11 +315,13 @@ export const useDeviceAuth = (): DeviceAuthHook => {
   
   return {
     authorizedDevices,
-    authorizeDevice,
+    authorizeDevice: canAuthorizeOthers ? authorizeDevice : ((): DeviceInfo | null => null),
     revokeDevice,
     prepareAuthData,
     isCurrentDeviceShared,
     canAuthorizeOthers,
     remainingSlots
   }
-} 
+}
+
+export default useDeviceAuth; 
