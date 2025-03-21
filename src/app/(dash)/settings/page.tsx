@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import ResponsiveModal from '@/components/ui/responsive-modal'
@@ -18,7 +18,38 @@ const Page = () => {
   const { showToast } = useToast()
   const router = useRouter()
   const queryClient = useQueryClient()
-  const { sort, updateSort } = useSettingsStore()
+  const [sort, setSort] = useState<'asc' | 'score-up' | 'score-down'>('score-down')
+  const { updateSort } = useSettingsStore()
+  
+  // Безопасная инициализация состояния из хранилища
+  useEffect(() => {
+    // Получаем состояние из хранилища только на клиенте
+    const settings = useSettingsStore.getState()
+    setSort(settings.sort)
+  }, [])
+  
+  // Обработчик изменения сортировки
+  const handleSortChange = (newSort: 'asc' | 'score-up' | 'score-down') => {
+    setSort(newSort)
+    updateSort(newSort)
+  }
+
+  // Безопасное удаление данных при выходе
+  const handleLogout = () => {
+    queryClient.removeQueries()
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('user-iin')
+        localStorage.removeItem('user-password')
+        localStorage.removeItem('samga-current-device-id')
+        localStorage.removeItem('samga-authorized-devices')
+      } catch (error) {
+        console.error('Ошибка при очистке хранилища:', error)
+      }
+    }
+    showToast('Выход выполнен успешно', 'success')
+    logout().then(() => router.push('/login'))
+  }
 
   return (
     <div className="mx-auto">
@@ -40,7 +71,7 @@ const Page = () => {
           
           <div className="flex flex-row items-center justify-between py-1.5">
             <p className="text-lg">Сортировка</p>
-            <Select value={sort} onValueChange={updateSort}>
+            <Select value={sort} onValueChange={handleSortChange}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Theme" />
               </SelectTrigger>
@@ -83,17 +114,7 @@ const Page = () => {
           заново входить в свой аккаунт. Вы уверены?
           <Button
             className="mt-3 w-full"
-            onClick={() => {
-              queryClient.removeQueries()
-              if (typeof window !== 'undefined') {
-                localStorage.removeItem('user-iin')
-                localStorage.removeItem('user-password')
-                localStorage.removeItem('samga-current-device-id')
-                localStorage.removeItem('samga-authorized-devices')
-              }
-              showToast('Выход выполнен успешно', 'success')
-              logout().then(() => router.push('/login'))
-            }}
+            onClick={handleLogout}
           >
             Подтвердить выход
           </Button>

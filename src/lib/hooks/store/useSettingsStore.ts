@@ -56,6 +56,19 @@ const createSafeStorage = () => {
   };
 };
 
+// Безопасно получаем текущую четверть, возвращаем 1 по умолчанию для серверного рендеринга
+const getDefaultQuarter = () => {
+  try {
+    // Только вызываем useCurrentQuarter на клиенте
+    if (typeof window !== 'undefined') {
+      return useCurrentQuarter().toString();
+    }
+    return '1'; // Значение по умолчанию для серверного рендеринга
+  } catch (e) {
+    return '1'; // Запасной вариант при ошибке
+  }
+};
+
 const useSettingsStore = create<Settings>()(
   persist(
     devtools((set) => ({
@@ -65,7 +78,7 @@ const useSettingsStore = create<Settings>()(
         average: { from: 65, to: 84 },
         bad: { from: 0, to: 64 },
       },
-      currentQuarter: useCurrentQuarter().toString(),
+      currentQuarter: getDefaultQuarter(),
       updateRanges: (ranges) => {
         if (validateSettings(ranges)) {
           set((state) => ({ ...state, ranges }))
@@ -82,6 +95,7 @@ const useSettingsStore = create<Settings>()(
       name: 'settings',
       version: 1,
       storage: createJSONStorage(() => createSafeStorage()),
+      skipHydration: typeof window === 'undefined', // Пропускаем гидратацию на сервере
     },
   ),
 )

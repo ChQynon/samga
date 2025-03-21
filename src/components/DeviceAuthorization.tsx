@@ -77,7 +77,14 @@ const DeviceAuthorization = () => {
     if (!devices) return [];
     
     // Получаем ID текущего устройства
-    const currentDeviceId = localStorage.getItem('samga-current-device-id');
+    let currentDeviceId = null;
+    if (typeof window !== 'undefined') {
+      try {
+        currentDeviceId = localStorage.getItem('samga-current-device-id');
+      } catch (error) {
+        console.error('Ошибка при чтении из localStorage:', error);
+      }
+    }
     
     return devices.map(device => {
       // Флаг текущего устройства
@@ -171,11 +178,13 @@ const DeviceAuthorization = () => {
         
         // Попытка извлечь информацию об устройстве-источнике из localStorage
         try {
-          const authDataJson = localStorage.getItem('last-auth-source')
-          if (authDataJson) {
-            const authData = JSON.parse(authDataJson)
-            if (authData.sourceDevice) {
-              setSourceDevice(authData.sourceDevice)
+          if (typeof window !== 'undefined') {
+            const authDataJson = localStorage.getItem('last-auth-source')
+            if (authDataJson) {
+              const authData = JSON.parse(authDataJson)
+              if (authData.sourceDevice) {
+                setSourceDevice(authData.sourceDevice)
+              }
             }
           }
         } catch (error) {
