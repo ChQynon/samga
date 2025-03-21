@@ -388,8 +388,15 @@ const DeviceAuthorization = () => {
                     </div>
                   ) : (
                     <>
-                      <div className="relative p-4 bg-white rounded-md">
-                        <QRCodeSVG value={authQrData} size={280} bgColor="#FFFFFF" fgColor="#000000" level="H" />
+                      <div className="relative p-4 bg-white rounded-md border-none">
+                        <QRCodeSVG 
+                          value={authQrData} 
+                          size={320} 
+                          bgColor="#FFFFFF" 
+                          fgColor="#000000" 
+                          level="L"
+                          includeMargin={true}
+                        />
                       </div>
                       <p className="mt-4 text-center text-sm text-muted-foreground">
                         Отсканируйте этот QR-код на устройстве, на котором вы хотите авторизоваться.
