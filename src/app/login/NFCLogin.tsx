@@ -65,7 +65,7 @@ const getBrowserInfo = (): string => {
 
 const NFCLogin = () => {
   const { isAvailable, status, error, startReading } = useNFC()
-  const { showToast, toast } = useToast()
+  const { showToast } = useToast()
   const router = useRouter()
   
   const [isProcessing, setIsProcessing] = useState(false)
