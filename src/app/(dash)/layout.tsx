@@ -32,13 +32,6 @@ const Layout: FC<PropsWithChildren> = ({ children }) => {
                 <span className="text-muted-foreground">Создано qynon</span>
               </Button>
             </a>
-            
-            <a href="https://t.me/samgay_nis" target="_blank" rel="noopener">
-              <Button variant="outline" size="icon" className="h-8 w-8">
-                <TelegramLogo className="h-4 w-4" />
-                <span className="sr-only">Наш канал</span>
-              </Button>
-            </a>
           </div>
         </div>
         
@@ -47,9 +40,6 @@ const Layout: FC<PropsWithChildren> = ({ children }) => {
             <TelegramLogo className="h-5 w-5" />
             <span className="text-sm font-medium">Наш Telegram канал</span>
           </a>
-          <p className="text-xs text-muted-foreground">
-            P.S. Интересный факт: этот сайт создал 8 классник
-          </p>
         </div>
       </footer>
     </>
