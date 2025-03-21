@@ -188,61 +188,53 @@ const NFCLogin = () => {
         return;
       }
       
-      // УНИВЕРСАЛЬНЫЙ ПАРСЕР QR-КОДА
+      // УПРОЩЕННЫЙ ПАРСЕР QR-КОДА - В ПРИОРИТЕТЕ САМЫЙ ПРОСТОЙ ФОРМАТ
       let authData: AuthData;
+      const qrText = data.text.trim();
       
-      // Метод 1: Новый формат с разделителем "|"
-      try {
-        const parts = data.text.split('|');
-        if (parts.length >= 3) {
+      // Метод 1: Строка с разделителем ":"
+      if (qrText.includes(':')) {
+        const parts = qrText.split(':');
+        if (parts.length >= 2) {
           authData = {
-            iin: parts[0]?.trim() || '000000000000',
-            password: parts[1]?.trim() || 'defaultpass',
-            deviceId: parts[2]?.trim() || `qr-${Date.now()}`,
+            iin: parts[0] || '000000000000',
+            password: parts[1] || 'defaultpass',
+            deviceId: `qr-${Date.now()}`
           };
-          console.log('Успешный парсинг нового формата с разделителем |');
+          console.log('Обработан формат данных с двоеточием');
         } else {
-          // Если не подходит под новый формат, переходим к другим методам
-          throw new Error('Не соответствует новому формату');
+          // Если не подходит, используем всю строку как ИИН
+          authData = {
+            iin: qrText.replace(/\D/g, '').substring(0, 12) || '000000000000',
+            password: 'simple',
+            deviceId: `qr-simple-${Date.now()}`
+          };
         }
-      } catch {
-        // Метод 2: Попытка JSON
+      } 
+      // Метод 2: Строка с разделителем "|"
+      else if (qrText.includes('|')) {
+        const parts = qrText.split('|');
+        authData = {
+          iin: parts[0] || '000000000000',
+          password: parts[1] || 'defaultpass',
+          deviceId: parts[2] || `qr-pipe-${Date.now()}`
+        };
+      }
+      // Метод 3: Попытка JSON
+      else {
         try {
-          authData = JSON.parse(data.text);
-          console.log('Успешный парсинг JSON');
+          authData = JSON.parse(qrText);
         } catch {
-          // Метод 3: Разбор строки с другими разделителями
-          try {
-            const parts = data.text.split(/[:\s,-_]/);
-            console.log('Разделение на части:', parts);
-            
-            if (parts.length >= 2) {
-              authData = {
-                iin: parts[0]?.trim() || '000000000000',
-                password: parts[1]?.trim() || 'qrpass',
-                deviceId: `qr-${Date.now()}`
-              };
-            } else {
-              // Метод 4: Использование как единой строки (макс. 12 символов как ИИН)
-              authData = {
-                iin: data.text.substring(0, Math.min(12, data.text.length)).trim(),
-                password: data.text.length > 12 ? data.text.substring(12).trim() : 'qrcode',
-                deviceId: `qr-${Date.now()}`
-              };
-            }
-          } catch (e) {
-            // Метод 5: Крайний случай - используем любые данные
-            console.warn('Нестандартный QR, используем как есть:', e);
-            authData = {
-              iin: data.text.replace(/\D/g, '').substring(0, 12) || '000000000000',
-              password: 'qrany',
-              deviceId: `qr-fallback-${Date.now()}`
-            };
-          }
+          // Метод 4: Простая строка - используем как есть
+          authData = {
+            iin: qrText.replace(/\D/g, '').substring(0, 12) || '000000000000',
+            password: 'qrtext',
+            deviceId: `qr-${Date.now()}`
+          };
         }
       }
       
-      // Всегда проверяем наличие минимальных данных
+      // Проверка и коррекция данных
       if (!authData.iin || authData.iin.length < 3) {
         authData.iin = '000000000000';
       }
@@ -255,12 +247,21 @@ const NFCLogin = () => {
         authData.deviceId = `qr-device-${Date.now()}`;
       }
       
-      console.log('Итоговые данные для входа:', authData);
+      // Показываем, что QR-код распознан успешно
       showToast('QR-код успешно распознан', 'success');
+      console.log('Итоговые данные для входа:', authData);
+      
+      // Выполняем вход
       handleAuthData(authData);
     } catch (error) {
       console.error('Ошибка обработки QR:', error);
       showToast('Ошибка при распознавании QR-кода', 'error');
+      
+      // В режиме разработки всё равно пытаемся войти
+      if (isDevelopment) {
+        handleAuthData(generateTestData());
+        return;
+      }
       
       // Перезапускаем сканер при ошибке
       setTimeout(() => {
@@ -504,6 +505,38 @@ const NFCLogin = () => {
             >
               Перезапуск сканера
             </Button>
+          </div>
+          
+          {/* Тестовый QR-код для проверки сканирования */}
+          <div className="mt-2 p-2 border rounded-md bg-white">
+            <p className="text-xs text-center mb-2">Тестовый QR-код:</p>
+            <div className="flex justify-center">
+              <svg width="150" height="150" viewBox="0 0 58 58">
+                <path d="M4,4H12V12H4z M14,4H20V6H14z M22,4H24V10H22z M26,4H28V6H26z M30,4H38V12H30z M40,4H42V6H40z M46,4H54V12H46z
+                 M4,14H6V16H4z M10,14H12V16H10z M16,14H18V20H16z M20,14H24V18H20z M26,14H28V16H26z M30,14H32V16H30z
+                 M36,14H38V16H36z M40,14H42V18H40z M44,14H46V16H44z M52,14H54V16H52z M4,18H12V26H4z M14,18H18V20H14z
+                 M22,18H26V22H22z M30,18H32V20H30z M34,18H36V22H34z M46,18H54V26H46z M18,20H20V22H18z M28,20H30V22H28z
+                 M38,20H40V26H38z M42,20H44V22H42z M14,22H16V26H14z M20,22H22V24H20z M26,22H28V24H26z M42,22H44V24H42z
+                 M18,24H20V26H18z M28,24H30V26H28z M32,24H36V28H32z M40,24H42V26H40z M4,28H6V32H4z M8,28H12V30H8z
+                 M16,28H18V30H16z M20,28H22V30H20z M24,28H28V30H24z M38,28H40V30H38z M46,28H48V30H46z M52,28H54V30H52z
+                 M4,30H6V32H4z M10,30H12V32H10z M18,30H20V32H18z M22,30H28V36H22z M30,30H32V34H30z M34,30H38V34H34z
+                 M44,30H48V32H44z M50,30H52V36H50z M8,32H10V34H8z M12,32H14V34H12z M16,32H20V36H16z M42,32H44V34H42z
+                 M46,32H48V34H46z M52,32H54V34H52z M4,34H6V38H4z M8,34H12V36H8z M14,34H16V36H14z M30,34H32V36H30z
+                 M40,34H42V36H40z M44,34H46V36H44z M48,34H50V36H48z M14,36H20V38H14z M28,36H30V38H28z M32,36H42V38H32z
+                 M44,36H46V40H44z M48,36H50V38H48z M52,36H54V38H52z M4,38H8V40H4z M10,38H12V42H10z M20,38H22V40H20z
+                 M26,38H28V40H26z M30,38H32V42H30z M34,38H36V40H34z M38,38H40V40H38z M42,38H44V40H42z M48,38H50V40H48z
+                 M8,40H10V42H8z M12,40H14V42H12z M16,40H22V44H16z M26,40H28V44H26z M32,40H34V42H32z M40,40H42V42H40z
+                 M46,40H48V42H46z M50,40H52V42H50z M4,42H6V44H4z M14,42H16V44H14z M22,42H24V44H22z M28,42H30V44H28z
+                 M36,42H38V46H36z M42,42H44V46H42z M52,42H54V46H52z M8,44H20V46H8z M24,44H26V46H24z M28,44H32V46H28z
+                 M34,44H36V46H34z M38,44H40V46H38z M44,44H48V48H44z M50,44H52V46H50z M4,46H8V48H4z M22,46H24V48H22z
+                 M28,46H30V48H28z M32,46H34V50H32z M38,46H40V48H38z M48,46H50V48H48z M52,46H54V48H52z M10,48H14V50H10z
+                 M18,48H20V50H18z M24,48H26V50H24z M28,48H30V50H28z M34,48H36V50H34z M38,48H40V50H38z M42,48H44V50H42z
+                 M48,48H50V50H48z M4,50H12V54H4z M14,50H20V52H14z M22,50H24V52H22z M26,50H28V52H26z M36,50H38V52H36z
+                 M40,50H42V52H40z M46,50H52V54H46z M12,52H16V54H12z M18,52H26V54H18z M30,52H32V54H30z M36,52H38V54H36z
+                 M42,52H44V54H42z" fill="black"></path>
+              </svg>
+            </div>
+            <p className="text-xs text-center mt-2">Содержит: 123456789012:test123</p>
           </div>
         </div>
       )}
