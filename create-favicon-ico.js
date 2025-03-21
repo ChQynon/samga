@@ -31,9 +31,14 @@ async function createFaviconIco() {
 
   // Преобразуем PNG в ICO с помощью metadata
   const pngBuffer = pngBuffers[1]; // используем 32x32 для favicon.ico
-  fs.writeFileSync(path.join(__dirname, 'public/favicon.ico'), pngBuffer);
   
-  console.log('favicon.ico успешно создан!');
+  // Проверяем, что pngBuffer не undefined
+  if (pngBuffer) {
+    fs.writeFileSync(path.join(__dirname, 'public/favicon.ico'), pngBuffer);
+    console.log('favicon.ico успешно создан!');
+  } else {
+    console.error('Ошибка: не удалось создать PNG-буфер для favicon.ico');
+  }
 }
 
 createFaviconIco().catch(console.error); 
