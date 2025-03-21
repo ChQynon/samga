@@ -5,6 +5,7 @@ import Logo from '@/components/misc/Logo'
 import { useContingent } from '@/lib/hooks/useContingent'
 import { Skeleton } from '@/components/ui/skeleton'
 import RefreshButton from '@/widgets/navbar/RefreshButton'
+import Logout from '@/components/Logout'
 
 const Header = () => {
   const { data: contingent, isLoading, isError, isStale } = useContingent()
@@ -38,7 +39,12 @@ const Header = () => {
           )}
         </div>
       </div>
-      <RefreshButton />
+      <div className="flex items-center gap-2">
+        {!isError && contingent && (
+          <Logout variant="outline" buttonText="Выйти" showIcon={true} />
+        )}
+        <RefreshButton />
+      </div>
     </header>
   )
 }

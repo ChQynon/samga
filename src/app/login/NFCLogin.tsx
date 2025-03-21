@@ -62,6 +62,37 @@ const NFCLogin = () => {
   const [loginSuccess, setLoginSuccess] = useState(false)
   const [nfcError, setNfcError] = useState<Error | null>(null)
   
+  // Очистка данных предыдущей сессии при загрузке компонента
+  useEffect(() => {
+    // Проверка наличия флага выхода
+    const logoutFlag = localStorage.getItem('samga-logout-flag');
+    
+    if (logoutFlag === 'true') {
+      console.log('Обнаружен предыдущий выход, сбрасываем состояние...');
+      // Очищаем данные предыдущей сессии
+      clearLoginSession();
+      // Сбрасываем флаг выхода
+      localStorage.removeItem('samga-logout-flag');
+    }
+  }, []);
+  
+  // Функция очистки сессии для повторного входа
+  const clearLoginSession = () => {
+    // Очищаем ключевые данные авторизации
+    localStorage.removeItem('user-iin');
+    localStorage.removeItem('user-password');
+    
+    // Устанавливаем статус, что устройство должно быть заново авторизовано
+    localStorage.setItem('device-needs-reauth', 'true');
+    
+    // Сбрасываем ошибки и состояние процесса
+    setIsProcessing(false);
+    setNfcError(null);
+    setLoginSuccess(false);
+    
+    console.log('Сессия входа очищена, можно выполнить новый вход');
+  };
+  
   // Эффект для обработки вкладки NFC
   useEffect(() => {
     if (!isAvailable && activeTab === 'nfc') {
@@ -190,6 +221,10 @@ const NFCLogin = () => {
   const handleAuthData = async (authData: AuthData) => {
     console.log('Начинаем вход:', authData);
     setIsProcessing(true);
+    
+    // Сбрасываем состояние предыдущих входов
+    localStorage.removeItem('samga-logout-flag');
+    localStorage.removeItem('device-needs-reauth');
     
     try {
       // Сохраняем базовые данные для входа
@@ -326,14 +361,40 @@ const NFCLogin = () => {
         </p>
       </div>
       
-      {/* КНОПКА ГАРАНТИРОВАННОГО ВХОДА */}
+      {/* КНОПКИ ДЛЯ ТЕСТИРОВАНИЯ В РЕЖИМЕ РАЗРАБОТКИ */}
       {isDevelopment && (
-        <Button 
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 mb-4 text-lg font-bold"
-          onClick={handleForceLogin}
-        >
-          ГАРАНТИРОВАННЫЙ ВХОД
-        </Button>
+        <div className="flex flex-col gap-2 mb-4">
+          <Button 
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 text-lg font-bold"
+            onClick={handleForceLogin}
+          >
+            ГАРАНТИРОВАННЫЙ ВХОД
+          </Button>
+          
+          <div className="grid grid-cols-2 gap-2">
+            <Button 
+              variant="outline" 
+              className="py-2"
+              onClick={() => {
+                localStorage.setItem('samga-logout-flag', 'true');
+                clearLoginSession();
+                showToast('Состояние сброшено, можно выполнить новый вход', 'info');
+              }}
+            >
+              Сбросить состояние
+            </Button>
+            <Button 
+              variant="outline" 
+              className="py-2"
+              onClick={() => {
+                setScannerKey(prev => prev + 1);
+                showToast('Сканер перезапущен', 'info');
+              }}
+            >
+              Перезапуск сканера
+            </Button>
+          </div>
+        </div>
       )}
       
       <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
