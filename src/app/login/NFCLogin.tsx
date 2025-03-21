@@ -1,8 +1,8 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
-import { useNFC } from '@/lib/hooks/useNFC'
+import { useNFC, DeviceInfo } from '@/lib/hooks/useNFC'
 import { useRouter } from 'next/navigation'
 import { Spinner, QrCode, ArrowsClockwise } from '@phosphor-icons/react'
 import QrScanner from 'react-qr-scanner'
@@ -18,6 +18,15 @@ interface AuthData {
     name: string
     id: string
   }
+}
+
+// Добавляем объявление для ToastProps
+interface ExtendedDeviceInfo extends DeviceInfo {
+  source?: {
+    name: string;
+    browser: string;
+    timestamp: number;
+  };
 }
 
 // Функция для получения информации о браузере
@@ -56,7 +65,7 @@ const getBrowserInfo = (): string => {
 
 const NFCLogin = () => {
   const { isAvailable, status, error, startReading } = useNFC()
-  const { showToast } = useToast()
+  const { showToast, toast } = useToast()
   const router = useRouter()
   
   const [isProcessing, setIsProcessing] = useState(false)
@@ -64,6 +73,9 @@ const NFCLogin = () => {
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment')
   const [scannerKey, setScannerKey] = useState(0)
   const [scanAnimation, setScanAnimation] = useState(false)
+  const [lastScannedData, setLastScannedData] = useState<string | null>(null)
+  const [loginSuccess, setLoginSuccess] = useState(false)
+  const [nfcError, setNfcError] = useState<Error | null>(null)
   
   // Анимация сканера
   const scannerRef = useRef<HTMLDivElement>(null)
@@ -94,9 +106,28 @@ const NFCLogin = () => {
     }
   }, [activeTab, isProcessing])
   
+  // Обработчик для NFC событий
+  useEffect(() => {
+    const handleNFCAuthData = (event: Event) => {
+      const customEvent = event as CustomEvent<any>
+      if (customEvent.detail) {
+        const dataString = JSON.stringify(customEvent.detail)
+        handleAuthData(JSON.parse(dataString))
+      }
+    }
+    
+    window.addEventListener('nfc-auth-data', handleNFCAuthData)
+    
+    return () => {
+      window.removeEventListener('nfc-auth-data', handleNFCAuthData)
+    }
+  }, [])
+  
   // Запуск чтения NFC
   const handleStartNFCReading = async () => {
     try {
+      setIsProcessing(false) // Сбрасываем состояние для возможности повторного сканирования
+      setLastScannedData(null)
       await startReading()
     } catch (e) {
       console.error('Ошибка при запуске чтения NFC:', e)
@@ -104,129 +135,174 @@ const NFCLogin = () => {
     }
   }
   
-  // Обработка QR кода
-  const handleScan = async (data: any) => {
-    if (data && data.text && !isProcessing) {
-      try {
-        // Проверка валидности данных перед обработкой
-        const parsed = JSON.parse(data.text)
-        if (parsed && parsed.iin && parsed.password && parsed.deviceId) {
-          handleAuthData(data.text)
+  // Обновляем обработчик сканирования QR-кода, чтобы избежать повторной обработки
+  const handleScan = useCallback(
+    (data: { text: string } | null) => {
+      if (data && data.text && data.text !== lastScannedData) {
+        setLastScannedData(data.text);
+        try {
+          // Проверяем структуру данных перед обработкой
+          const authData = JSON.parse(data.text);
+          if (authData && authData.deviceId && authData.iin && authData.password) {
+            console.log('QR код успешно отсканирован:', authData);
+            handleAuthData(authData);
+          } else {
+            throw new Error('Некорректный формат данных QR-кода');
+          }
+        } catch (error: any) {
+          const errorMsg = error.message || 'Ошибка при сканировании QR-кода';
+          console.error('Ошибка сканирования QR-кода:', errorMsg);
+          setNfcError(new Error(errorMsg));
+          showToast(errorMsg, 'error');
         }
-      } catch (e) {
-        console.error('Неверный формат QR-кода:', e)
       }
-    }
-  }
+    },
+    [lastScannedData]
+  );
   
   // Обработка ошибки сканера
   const handleError = (err: any) => {
     console.error('Ошибка сканера QR-кода:', err)
+    if (err && err.name !== 'NotAllowedError') {
+      // NotAllowedError происходит при отмене доступа к камере, не показываем уведомление в этом случае
+      showToast(`Ошибка сканера: ${err.message || 'Неизвестная ошибка'}`, 'error')
+    }
   }
   
-  // Обработка полученных данных (общая для NFC и QR)
-  const handleAuthData = async (data: string) => {
-    setIsProcessing(true)
-    
+  // Улучшаем функцию обработки данных аутентификации
+  const handleAuthData = async (authData: AuthData) => {
+    setIsProcessing(true);
     try {
-      // Пытаемся распарсить данные
-      const authData: AuthData = JSON.parse(data)
+      // Получаем данные текущего устройства
+      const sourceDevice = {
+        name: getBrowserInfo(),
+        browser: navigator.userAgent,
+        timestamp: new Date().getTime()
+      };
       
-      if (!authData.iin || !authData.password) {
-        showToast('Неверный формат данных аутентификации', 'error')
-        setIsProcessing(false)
-        return
-      }
+      // Сохраняем данные для авторизации
+      localStorage.setItem('user-iin', authData.iin);
+      localStorage.setItem('user-password', authData.password);
+      localStorage.setItem('samga-current-device-id', authData.deviceId);
       
-      // Сохраняем информацию об устройстве-источнике
-      if (authData.sourceDevice) {
-        localStorage.setItem('last-auth-source', JSON.stringify({
-          sourceDevice: authData.sourceDevice
-        }))
-      }
+      // Обрабатываем список устройств
+      const now = new Date();
+      let devices: ExtendedDeviceInfo[] = [];
       
-      // Сохраняем ID устройства в localStorage
-      localStorage.setItem('samga-current-device-id', authData.deviceId)
-      
-      // Сохраняем учетные данные для авторизации новых устройств
-      localStorage.setItem('user-iin', authData.iin)
-      localStorage.setItem('user-password', authData.password)
-      
-      // Добавляем устройство в список авторизованных
       try {
-        // Получаем текущий список устройств
-        const storedDevices = localStorage.getItem('samga-authorized-devices') || '[]'
-        const devices = JSON.parse(storedDevices)
-        
-        // Создаем новое устройство
-        const now = new Date()
-        const newDevice = {
-          id: authData.deviceId,
-          name: getBrowserInfo(),
-          browser: navigator.userAgent,
-          lastAccess: now.toLocaleString('ru'),
-          timestamp: now.getTime()
+        const storedDevices = localStorage.getItem('samga-authorized-devices');
+        if (storedDevices) {
+          devices = JSON.parse(storedDevices);
         }
-        
+      } catch (e) {
+        console.error('Ошибка при чтении списка устройств:', e);
+      }
+      
+      // Создаем новое устройство
+      const newDevice: ExtendedDeviceInfo = {
+        id: authData.deviceId,
+        name: getBrowserInfo(),
+        browser: navigator.userAgent,
+        lastAccess: now.toLocaleString('ru'),
+        timestamp: now.getTime(),
+        source: sourceDevice // Добавляем информацию об устройстве, с которого был выполнен вход
+      };
+      
+      // Проверяем, существует ли уже это устройство
+      const existingDeviceIndex = devices.findIndex(device => device && device.id === authData.deviceId);
+      
+      // Исправляем обновление существующего устройства
+      if (existingDeviceIndex !== -1 && devices[existingDeviceIndex]) {
+        // Обновляем существующее устройство
+        const existingDevice = devices[existingDeviceIndex];
+        devices[existingDeviceIndex] = {
+          id: existingDevice.id || authData.deviceId,
+          name: existingDevice.name || getBrowserInfo(),
+          browser: existingDevice.browser || navigator.userAgent,
+          lastAccess: now.toLocaleString('ru'),
+          timestamp: now.getTime(),
+          source: sourceDevice
+        };
+      } else {
         // Проверяем, не превышен ли лимит (5 устройств)
         if (devices.length >= 5) {
           // Если превышен, заменяем самое старое устройство
-          let oldestIndex = 0
-          let oldestTimestamp = devices[0].timestamp
+          let oldestIndex = 0;
+          let oldestTimestamp = devices[0]?.timestamp || 0;
           
           for (let i = 1; i < devices.length; i++) {
-            if (devices[i].timestamp < oldestTimestamp) {
-              oldestTimestamp = devices[i].timestamp
-              oldestIndex = i
+            const device = devices[i];
+            if (device && device.timestamp < oldestTimestamp) {
+              oldestTimestamp = device.timestamp;
+              oldestIndex = i;
             }
           }
           
-          devices[oldestIndex] = newDevice
+          // Показываем уведомление о замене устройства
+          showToast("Достигнут лимит устройств. Самое старое устройство было заменено.", 'info');
+          
+          devices[oldestIndex] = newDevice;
         } else {
           // Добавляем новое устройство
-          devices.push(newDevice)
+          devices.push(newDevice);
         }
-        
-        localStorage.setItem('samga-authorized-devices', JSON.stringify(devices))
-      } catch (e) {
-        console.error('Ошибка при добавлении устройства в список:', e)
       }
       
-      showToast('Данные аутентификации получены, выполняем вход...', 'info')
+      // Сохраняем обновленный список устройств
+      localStorage.setItem('samga-authorized-devices', JSON.stringify(devices));
       
-      // Выполняем вход
+      // Показываем сообщение об успешном входе
+      setLoginSuccess(true);
+      showToast("Устройство успешно авторизовано", 'success');
+      
+      // Пытаемся выполнить вход
       try {
-        const result = await login(authData.iin, authData.password)
+        const result = await login(authData.iin, authData.password);
         
         if (result.success) {
-          showToast('Вход выполнен успешно!', 'success')
-          
-          // Задержка перед переходом для отображения toast
+          // Перенаправляем после короткой задержки
           setTimeout(() => {
-            // Используем window.location.href вместо router.push для полной перезагрузки
-            window.location.href = '/'
-          }, 1000)
+            window.location.href = '/';
+          }, 2000);
         } else {
-          const errorMessage = result.errors?.password || result.errors?.iin || 'Не удалось войти в систему'
-          showToast(errorMessage, 'error')
-          setIsProcessing(false)
+          const errorMsg = result.errors?.iin || result.errors?.password || 'Ошибка входа';
+          showToast(errorMsg, 'error');
+          setIsProcessing(false);
         }
-      } catch (e) {
-        console.error('Ошибка при выполнении входа:', e)
-        showToast('Ошибка при выполнении входа', 'error')
-        setIsProcessing(false)
+      } catch (error: any) {
+        console.error('Ошибка при выполнении входа:', error);
+        showToast("Не удалось выполнить вход: " + (error.message || 'неизвестная ошибка'), 'error');
+        setIsProcessing(false);
       }
-    } catch (e) {
-      console.error('Ошибка при обработке данных аутентификации:', e)
-      showToast('Неверный формат данных аутентификации', 'error')
-      setIsProcessing(false)
+      
+    } catch (error: any) {
+      console.error('Ошибка при обработке данных авторизации:', error);
+      setNfcError(new Error('Не удалось авторизовать устройство: ' + (error.message || 'неизвестная ошибка')));
+      showToast("Не удалось авторизовать устройство", 'error');
+      
+      // По завершении обработки в любом случае
+      setTimeout(() => {
+        setIsProcessing(false);
+        handleRescan(); // Сбрасываем всё для возможности нового сканирования
+      }, 2000);
     }
-  }
+  };
   
   // Переключение камеры
   const handleToggleCamera = () => {
     setFacingMode(facingMode === 'environment' ? 'user' : 'environment')
     setScannerKey(prev => prev + 1) // Обновляем ключ для пересоздания компонента сканера
+  }
+  
+  // Повторное сканирование
+  const handleRescan = () => {
+    setIsProcessing(false)
+    setLastScannedData(null)
+    if (activeTab === 'nfc') {
+      handleStartNFCReading()
+    } else {
+      setScannerKey(prev => prev + 1)
+    }
   }
   
   return (
@@ -258,10 +334,28 @@ const NFCLogin = () => {
                 </>
               ) : isProcessing ? (
                 <>
-                  <Spinner size={48} className="animate-spin text-primary" />
-                  <p className="mt-4 text-center text-sm text-muted-foreground">
-                    Выполняем вход...
-                  </p>
+                  {loginSuccess ? (
+                    <div className="flex flex-col items-center">
+                      <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-2">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M5 12L10 17L20 7" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </div>
+                      <p className="mt-2 text-center text-sm font-medium text-green-600">
+                        Вход выполнен успешно!
+                      </p>
+                      <p className="text-center text-xs text-muted-foreground">
+                        Перенаправление...
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <Spinner size={48} className="animate-spin text-primary" />
+                      <p className="mt-4 text-center text-sm text-muted-foreground">
+                        Выполняем вход...
+                      </p>
+                    </>
+                  )}
                 </>
               ) : (
                 <>
@@ -280,10 +374,20 @@ const NFCLogin = () => {
               )}
             </div>
             
-            {error && (
-              <p className="text-center text-sm text-red-600 mt-4">
-                {error.message}
-              </p>
+            {nfcError && (
+              <div className="mt-4 text-center">
+                <p className="text-sm text-red-600">
+                  {nfcError.message}
+                </p>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="mt-2"
+                  onClick={handleRescan}
+                >
+                  Повторить сканирование
+                </Button>
+              </div>
             )}
           </TabsContent>
         )}
@@ -311,7 +415,7 @@ const NFCLogin = () => {
                     constraints={{
                       video: {
                         facingMode: facingMode
-                      },
+                      }
                     }}
                     style={{ width: '100%', height: '100%' }}
                   />
@@ -348,13 +452,39 @@ const NFCLogin = () => {
               </>
             ) : (
               <div className="h-48 flex flex-col items-center justify-center">
-                <Spinner size={48} className="animate-spin text-primary" />
-                <p className="mt-4 text-center text-sm text-muted-foreground">
-                  Выполняем вход...
-                </p>
+                {loginSuccess ? (
+                  <div className="flex flex-col items-center">
+                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-2">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M5 12L10 17L20 7" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
+                    <p className="mt-2 text-center text-sm font-medium text-green-600">
+                      Вход выполнен успешно!
+                    </p>
+                    <p className="text-center text-xs text-muted-foreground">
+                      Перенаправление...
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <Spinner size={48} className="animate-spin text-primary" />
+                    <p className="mt-4 text-center text-sm text-muted-foreground">
+                      Выполняем вход...
+                    </p>
+                  </>
+                )}
               </div>
             )}
           </div>
+          
+          {!isProcessing && (
+            <div className="mt-4 text-center">
+              <p className="text-xs text-muted-foreground">
+                Наведите камеру на QR-код для автоматического сканирования
+              </p>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
       
