@@ -21,8 +21,10 @@ import {
   DialogHeader, 
   DialogTitle 
 } from '@/components/ui/dialog'
-import { Spinner, Trash, PhoneSlash } from '@phosphor-icons/react'
+import { Spinner, Trash, PhoneSlash, QrCode } from '@phosphor-icons/react'
 import { useToast } from '@/lib/providers/ToastProvider'
+import { QRCodeSVG } from 'qrcode.react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 const DeviceAuthorization = () => {
   const { authorizedDevices, revokeDevice, prepareAuthData } = useDeviceAuth()
@@ -32,21 +34,28 @@ const DeviceAuthorization = () => {
   const [isNFCDialogOpen, setIsNFCDialogOpen] = useState(false)
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
+  const [authQrData, setAuthQrData] = useState<string>('')
+  const [activeTab, setActiveTab] = useState<string>(isAvailable ? 'nfc' : 'qr')
   
-  // Начать процесс авторизации через NFC
-  const handleStartNFCAuth = async () => {
+  // Начать процесс авторизации (общий метод)
+  const handleStartAuth = async () => {
     setIsNFCDialogOpen(true)
     try {
       const authData = prepareAuthData()
       if (authData) {
-        await startWriting(authData)
+        setAuthQrData(authData)
+        
+        if (isAvailable && activeTab === 'nfc') {
+          await startWriting(authData)
+        }
+        
         showToast('Данные готовы к передаче', 'success')
       } else {
         showToast('Не удалось подготовить данные для передачи', 'error')
         setIsNFCDialogOpen(false)
       }
     } catch (e) {
-      showToast('Ошибка при инициализации NFC', 'error')
+      showToast('Ошибка при подготовке данных', 'error')
       setIsNFCDialogOpen(false)
     }
   }
@@ -114,58 +123,75 @@ const DeviceAuthorization = () => {
       {/* Кнопка для добавления нового устройства */}
       <div className="pt-4">
         <Button
-          onClick={handleStartNFCAuth}
-          disabled={!isAvailable}
+          onClick={handleStartAuth}
           className="w-full"
         >
           Авторизовать новое устройство
         </Button>
-        
-        {!isAvailable && (
-          <p className="mt-2 text-xs text-muted-foreground text-center">
-            Ваше устройство не поддерживает NFC. 
-            <br />
-            Эта функция доступна только в Chrome на Android-устройствах.
-          </p>
-        )}
       </div>
       
-      {/* Диалог для NFC авторизации */}
+      {/* Диалог для авторизации */}
       <Dialog open={isNFCDialogOpen} onOpenChange={setIsNFCDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Авторизация через NFC</DialogTitle>
+            <DialogTitle>Авторизация устройства</DialogTitle>
             <DialogDescription>
-              Поднесите ваш телефон к устройству, которое хотите авторизовать.
-              На втором устройстве должна быть открыта страница входа с выбранным
-              вариантом входа через NFC.
+              Поднесите устройство или отсканируйте QR-код для авторизации.
             </DialogDescription>
           </DialogHeader>
           
-          <div className="flex flex-col items-center justify-center py-6">
-            {status === 'writing' && (
-              <>
-                <Spinner size={48} className="animate-spin text-primary" />
-                <p className="mt-4 text-center text-sm text-muted-foreground">
-                  Подготовка данных...
-                  <br />
-                  Поднесите устройство к другому телефону.
+          <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              {isAvailable && (
+                <TabsTrigger value="nfc">NFC</TabsTrigger>
+              )}
+              <TabsTrigger value="qr" className={isAvailable ? '' : 'col-span-2'}>QR-код</TabsTrigger>
+            </TabsList>
+            
+            {isAvailable && (
+              <TabsContent value="nfc" className="flex flex-col items-center justify-center py-6">
+                {status === 'writing' && (
+                  <>
+                    <Spinner size={48} className="animate-spin text-primary" />
+                    <p className="mt-4 text-center text-sm text-muted-foreground">
+                      Подготовка данных...
+                      <br />
+                      Поднесите устройство к другому телефону.
+                    </p>
+                  </>
+                )}
+                
+                {status === 'error' && (
+                  <p className="text-center text-sm text-red-600">
+                    Произошла ошибка: {error?.message}
+                  </p>
+                )}
+                
+                {status === 'idle' && (
+                  <p className="text-center text-sm text-green-600">
+                    Данные готовы к передаче. Поднесите устройства друг к другу.
+                  </p>
+                )}
+              </TabsContent>
+            )}
+            
+            <TabsContent value="qr" className="flex flex-col items-center justify-center py-6">
+              {authQrData ? (
+                <>
+                  <QRCodeSVG value={authQrData} size={200} />
+                  <p className="mt-4 text-center text-sm text-muted-foreground">
+                    Отсканируйте этот QR-код на устройстве, на котором вы хотите авторизоваться.
+                    <br />
+                    На странице входа выберите "Войти с помощью другого устройства".
+                  </p>
+                </>
+              ) : (
+                <p className="text-center text-sm text-muted-foreground">
+                  Подготовка QR-кода...
                 </p>
-              </>
-            )}
-            
-            {status === 'error' && (
-              <p className="text-center text-sm text-red-600">
-                Произошла ошибка: {error?.message}
-              </p>
-            )}
-            
-            {status === 'idle' && (
-              <p className="text-center text-sm text-green-600">
-                Данные готовы к передаче. Поднесите устройства друг к другу.
-              </p>
-            )}
-          </div>
+              )}
+            </TabsContent>
+          </Tabs>
           
           <DialogFooter>
             <Button variant="secondary" onClick={() => setIsNFCDialogOpen(false)}>
