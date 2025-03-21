@@ -16,6 +16,8 @@ export interface DeviceAuthHook {
   prepareAuthData: () => string
   // Текущее устройство авторизовано через другое устройство?
   isCurrentDeviceShared: boolean
+  // Проверка, может ли устройство авторизовать другие устройства
+  canAuthorizeOthers: boolean
 }
 
 // Получить браузер и ОС
@@ -65,6 +67,8 @@ export const useDeviceAuth = (): DeviceAuthHook => {
   const [authorizedDevices, setAuthorizedDevices] = useState<DeviceInfo[]>([])
   // Статус текущего устройства
   const [isCurrentDeviceShared, setIsCurrentDeviceShared] = useState(false)
+  // Может ли текущее устройство авторизовать другие
+  const [canAuthorizeOthers, setCanAuthorizeOthers] = useState(true)
   
   // Загрузка списка устройств при инициализации
   useEffect(() => {
@@ -91,6 +95,8 @@ export const useDeviceAuth = (): DeviceAuthHook => {
       const currentDeviceId = localStorage.getItem(CURRENT_DEVICE_KEY)
       if (currentDeviceId) {
         setIsCurrentDeviceShared(true)
+        // Шаренные устройства не могут авторизовать другие устройства
+        setCanAuthorizeOthers(false)
       }
     } catch (e) {
       console.error('Ошибка при загрузке данных об устройствах:', e)
@@ -151,9 +157,14 @@ export const useDeviceAuth = (): DeviceAuthHook => {
   }, [authorizedDevices, saveDevices])
   
   // Подготовка данных для передачи через NFC
-  // Здесь мы получаем учетные данные из localStorage и готовим их для передачи
   const prepareAuthData = useCallback((): string => {
     try {
+      // Запрещаем авторизацию с устройства, которое само было авторизовано через другое устройство
+      if (isCurrentDeviceShared) {
+        console.error('Нельзя авторизовать другие устройства с устройства, которое само было авторизовано')
+        return ''
+      }
+      
       // Получаем данные из localStorage
       const iin = localStorage.getItem('user-iin')
       const password = localStorage.getItem('user-password')
@@ -198,7 +209,7 @@ export const useDeviceAuth = (): DeviceAuthHook => {
       console.error('Ошибка при подготовке данных аутентификации:', e)
       return ''
     }
-  }, [authorizeDevice])
+  }, [authorizeDevice, isCurrentDeviceShared])
   
   // Обновление времени последнего доступа для текущего устройства
   const updateCurrentDeviceTimestamp = useCallback(() => {
@@ -242,6 +253,7 @@ export const useDeviceAuth = (): DeviceAuthHook => {
     authorizeDevice,
     revokeDevice,
     prepareAuthData,
-    isCurrentDeviceShared
+    isCurrentDeviceShared,
+    canAuthorizeOthers
   }
 } 
