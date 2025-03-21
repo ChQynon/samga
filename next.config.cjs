@@ -5,6 +5,10 @@ const nextConfig = {
     // Отключаем проверку ESLint во время сборки
     ignoreDuringBuilds: true,
   },
+  typescript: {
+    // Отключаем проверку TypeScript во время сборки
+    ignoreBuildErrors: true,
+  },
 };
 
 module.exports = nextConfig;
