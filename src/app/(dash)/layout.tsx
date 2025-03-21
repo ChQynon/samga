@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { TelegramLogo } from '@phosphor-icons/react/dist/ssr'
 import { env } from '@/env'
 import Link from 'next/link'
-import { motion } from 'framer-motion'
 
 const Layout: FC<PropsWithChildren> = ({ children }) => {
   return (
@@ -22,7 +21,7 @@ const Layout: FC<PropsWithChildren> = ({ children }) => {
 
         <NavBar />
       </div>
-      <footer className="mx-auto mb-3 mt-10 flex w-[92.5%] flex-col space-y-4 sm:max-w-[47rem]">
+      <footer className="mx-auto mb-3 mt-10 flex w-[92.5%] flex-col sm:max-w-[47rem]">
         <div className="flex flex-row items-center justify-between">
           <div className="flex w-fit flex-row items-center pl-2 text-muted-foreground sm:mx-0">
             <Logo width={19} height={19} className="my-0" withText={true} />
@@ -44,30 +43,23 @@ const Layout: FC<PropsWithChildren> = ({ children }) => {
           </a>
         </div>
 
-        <motion.div 
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="flex flex-wrap items-center justify-center gap-3 border-t border-muted pt-3 text-center"
-        >
-          <Link href="/privacy-policy" className="text-xs text-muted-foreground hover:text-primary hover:underline">
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground">
+          <Link href="/privacy" className="hover:underline">
             Политика конфиденциальности
           </Link>
-          <Link href="/terms-of-use" className="text-xs text-muted-foreground hover:text-primary hover:underline">
+          <span>•</span>
+          <Link href="/terms" className="hover:underline">
             Условия использования
           </Link>
-        </motion.div>
+          <span>•</span>
+          <Link href="/disclaimer" className="hover:underline">
+            Правовая информация
+          </Link>
+        </div>
 
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="rounded-lg border border-yellow-200/30 bg-yellow-50/50 p-3 dark:border-yellow-900/30 dark:bg-yellow-950/20"
-        >
-          <p className="text-center text-xs text-muted-foreground">
-            Данный сайт не имеет официальной связи с <a href="https://www.nis.edu.kz/" target="_blank" rel="noopener" className="font-medium text-primary hover:underline">АОО "Назарбаев Интеллектуальные школы"</a> и является независимым проектом.
-          </p>
-        </motion.div>
+        <div className="mt-3 text-center text-xs text-muted-foreground/70">
+          <p>Данный сайт не связан с <a href="https://www.nis.edu.kz/" target="_blank" rel="noopener" className="hover:underline">АОО "Назарбаев Интеллектуальные школы"</a> и является независимым проектом.</p>
+        </div>
       </footer>
     </>
   )
