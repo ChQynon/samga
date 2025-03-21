@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "next build --no-lint --no-typescript-error-check",
+    "build": "next build --no-lint",
     "dev": "next dev --turbo",
     "lint": "next lint",
     "start": "next start"
