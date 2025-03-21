@@ -42,6 +42,20 @@ function validateSettings(ranges: Settings['ranges']): boolean {
   )
 }
 
+// Создаем безопасное хранилище, проверяющее доступность window
+const createSafeStorage = () => {
+  if (typeof window !== 'undefined') {
+    return localStorage;
+  }
+  
+  // Возвращаем заглушку для localStorage при серверном рендеринге
+  return {
+    getItem: () => null,
+    setItem: () => undefined,
+    removeItem: () => undefined,
+  };
+};
+
 const useSettingsStore = create<Settings>()(
   persist(
     devtools((set) => ({
@@ -67,7 +81,7 @@ const useSettingsStore = create<Settings>()(
     {
       name: 'settings',
       version: 1,
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => createSafeStorage()),
     },
   ),
 )
