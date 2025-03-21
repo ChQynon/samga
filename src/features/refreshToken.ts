@@ -29,7 +29,7 @@ export const refreshToken = async (
     .then((res) => res.data)
 
   const {
-    school: { gid: UserSchoolGid },
+    data: { School: { Gid: UserSchoolGid } }
   } = await getAdditionalUserInfo(accessToken)
 
   const schoolOrganization = applications.find((application) => {
