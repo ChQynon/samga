@@ -3,13 +3,12 @@
 import { cookies } from 'next/headers'
 
 export const logout = async () => {
-  cookies().set('Access', '', {
-    maxAge: 0,
-    expires: new Date(0),
-  })
-
-  cookies().set('Refresh', '', {
-    maxAge: 0,
-    expires: new Date(0),
-  })
+  const cookiesStore = cookies()
+  
+  // Очищаем cookie при выходе
+  cookiesStore.delete('samga-auth-token')
+  cookiesStore.delete('samga-refresh-token')
+  cookiesStore.delete('samga-city')
+  
+  return { success: true }
 }

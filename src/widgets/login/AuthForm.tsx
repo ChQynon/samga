@@ -80,6 +80,14 @@ const AuthForm = () => {
   const onSubmit: SubmitHandler<AuthFormType> = async ({ iin, password }) => {
     await login(iin, password).then((res) => {
       if (res.success) {
+        // Сохраняем данные в localStorage для использования в NFC и QR авторизации
+        try {
+          localStorage.setItem('user-iin', iin)
+          localStorage.setItem('user-password', password)
+        } catch (e) {
+          console.error('Ошибка при сохранении данных авторизации:', e)
+        }
+        
         showToast('Вход выполнен успешно', 'success')
         router.push('/')
       } else {

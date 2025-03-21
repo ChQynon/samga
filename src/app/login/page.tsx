@@ -15,9 +15,11 @@ const Page = () => {
   
   // Обработчик получения данных аутентификации через NFC
   const handleAuthReceived = async (iin: string, password: string, deviceId: string) => {
-    // Сохраняем ID устройства
+    // Сохраняем ID устройства и учетные данные
     try {
       localStorage.setItem('samga-current-device-id', deviceId)
+      localStorage.setItem('user-iin', iin)
+      localStorage.setItem('user-password', password)
       
       // Выполняем вход
       const result = await login(iin, password)

@@ -85,6 +85,10 @@ const Page = () => {
             className="mt-3 w-full"
             onClick={() => {
               queryClient.removeQueries()
+              localStorage.removeItem('user-iin')
+              localStorage.removeItem('user-password')
+              localStorage.removeItem('samga-current-device-id')
+              localStorage.removeItem('samga-authorized-devices')
               showToast('Выход выполнен успешно', 'success')
               logout().then(() => router.push('/login'))
             }}
