@@ -51,12 +51,14 @@ const DeviceAuthorization = () => {
         
         showToast('Данные готовы к передаче', 'success')
       } else {
-        showToast('Не удалось подготовить данные для передачи', 'error')
-        setIsNFCDialogOpen(false)
+        showToast('Не удалось подготовить данные для передачи. Возможно, вы не вошли в систему или не сохранили данные при входе.', 'error')
+        // Не закрываем диалог, показываем сообщение об ошибке
+        setAuthQrData('error')
       }
     } catch (e) {
+      console.error('Ошибка при подготовке данных:', e)
       showToast('Ошибка при подготовке данных', 'error')
-      setIsNFCDialogOpen(false)
+      setAuthQrData('error')
     }
   }
   
@@ -177,14 +179,37 @@ const DeviceAuthorization = () => {
             
             <TabsContent value="qr" className="flex flex-col items-center justify-center py-6">
               {authQrData ? (
-                <>
-                  <QRCodeSVG value={authQrData} size={200} />
-                  <p className="mt-4 text-center text-sm text-muted-foreground">
-                    Отсканируйте этот QR-код на устройстве, на котором вы хотите авторизоваться.
-                    <br />
-                    На странице входа выберите "Войти с помощью другого устройства".
-                  </p>
-                </>
+                authQrData === 'error' ? (
+                  <div className="text-center">
+                    <div className="rounded-full bg-red-100 p-3 mx-auto mb-4 w-16 h-16 flex items-center justify-center">
+                      <PhoneSlash className="h-8 w-8 text-red-600" />
+                    </div>
+                    <p className="text-center text-sm text-red-600 mb-2">
+                      Не удалось подготовить данные для QR-кода.
+                    </p>
+                    <p className="text-center text-xs text-muted-foreground">
+                      Убедитесь, что вы вошли в систему и сохранили данные входа.
+                      <br />
+                      Если вы используете эту функцию впервые, сначала войдите обычным способом.
+                    </p>
+                    <Button 
+                      className="mt-4" 
+                      variant="outline"
+                      onClick={() => window.location.href = '/login'}
+                    >
+                      Перейти на страницу входа
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <QRCodeSVG value={authQrData} size={200} />
+                    <p className="mt-4 text-center text-sm text-muted-foreground">
+                      Отсканируйте этот QR-код на устройстве, на котором вы хотите авторизоваться.
+                      <br />
+                      На странице входа выберите "Войти с помощью другого устройства".
+                    </p>
+                  </>
+                )
               ) : (
                 <p className="text-center text-sm text-muted-foreground">
                   Подготовка QR-кода...

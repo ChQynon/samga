@@ -161,6 +161,25 @@ export const useDeviceAuth = (): DeviceAuthHook => {
       // Проверяем наличие данных
       if (!iin || !password) {
         console.error('Учетные данные не найдены в localStorage')
+        
+        // Если нет данных, используем хардкод для демонстрации
+        if (process.env.NODE_ENV === 'development') {
+          const testIin = '123456789012'
+          const testPassword = 'password123'
+          
+          // Создаем устройство с тестовыми данными
+          const deviceInfo = authorizeDevice(testIin, testPassword)
+          
+          // Формируем тестовые данные для передачи
+          const demoAuthData = {
+            iin: testIin,
+            password: testPassword,
+            deviceId: deviceInfo.id
+          }
+          
+          return JSON.stringify(demoAuthData)
+        }
+        
         return ''
       }
       
