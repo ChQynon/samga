@@ -14,16 +14,6 @@ import { env } from '@/env'
 export const runtime = 'nodejs'
 export const maxDuration = 30
 
-// Добавляем метаданные, чтобы favicon отображался и на API страницах
-export const metadata = {
-  title: 'samga.nis API',
-  icons: [
-    { rel: 'icon', url: '/favicon.ico', type: 'image/x-icon' },
-    { rel: 'icon', url: '/favicon.svg', type: 'image/svg+xml' },
-    { rel: 'shortcut icon', url: '/favicon.ico', type: 'image/x-icon' },
-  ],
-}
-
 const app = new Hono().basePath('/api')
 
 app.use(compress(), cors(), timeout(20000))
