@@ -9,7 +9,7 @@ export interface DeviceAuthHook {
   // Список устройств, авторизованных текущим пользователем
   authorizedDevices: DeviceInfo[]
   // Авторизация нового устройства
-  authorizeDevice: (iin: string, password: string) => DeviceInfo
+  authorizeDevice: (iin: string, password: string) => DeviceInfo | null
   // Отзыв доступа для устройства
   revokeDevice: (deviceId: string) => boolean
   // Подготовка данных для передачи через NFC
@@ -18,7 +18,18 @@ export interface DeviceAuthHook {
   isCurrentDeviceShared: boolean
   // Проверка, может ли устройство авторизовать другие устройства
   canAuthorizeOthers: boolean
+  // Сколько осталось мест для подключения устройств
+  remainingSlots: number
 }
+
+// Ключ для localStorage
+const DEVICES_STORAGE_KEY = 'samga-authorized-devices'
+const CURRENT_DEVICE_KEY = 'samga-current-device-id'
+const MAIN_DEVICE_KEY = 'samga-main-device-id'
+// Максимальное время жизни устройства без обновления (в миллисекундах) - 7 дней
+const MAX_DEVICE_LIFETIME = 7 * 24 * 60 * 60 * 1000;
+// Максимальное количество устройств, которые можно авторизовать
+const MAX_DEVICES = 5;
 
 // Получить браузер и ОС
 const getBrowserInfo = (): string => {
@@ -56,12 +67,6 @@ const getBrowserInfo = (): string => {
   return `${browserName} на ${osName}`
 }
 
-// Ключ для localStorage
-const DEVICES_STORAGE_KEY = 'samga-authorized-devices'
-const CURRENT_DEVICE_KEY = 'samga-current-device-id'
-// Максимальное время жизни устройства без обновления (в миллисекундах) - 7 дней
-const MAX_DEVICE_LIFETIME = 7 * 24 * 60 * 60 * 1000;
-
 export const useDeviceAuth = (): DeviceAuthHook => {
   // Список устройств
   const [authorizedDevices, setAuthorizedDevices] = useState<DeviceInfo[]>([])
@@ -69,10 +74,27 @@ export const useDeviceAuth = (): DeviceAuthHook => {
   const [isCurrentDeviceShared, setIsCurrentDeviceShared] = useState(false)
   // Может ли текущее устройство авторизовать другие
   const [canAuthorizeOthers, setCanAuthorizeOthers] = useState(true)
+  // Оставшееся количество слотов для устройств
+  const [remainingSlots, setRemainingSlots] = useState(MAX_DEVICES)
+  // ID основного устройства
+  const [mainDeviceId, setMainDeviceId] = useState<string | null>(null)
   
   // Загрузка списка устройств при инициализации
   useEffect(() => {
     try {
+      // Проверяем, является ли это устройство основным
+      const isMainDevice = !localStorage.getItem(MAIN_DEVICE_KEY)
+      
+      // Если это первый запуск и это основное устройство, сгенерируем ID
+      if (isMainDevice) {
+        const deviceId = uuidv4()
+        localStorage.setItem(MAIN_DEVICE_KEY, deviceId)
+        setMainDeviceId(deviceId)
+      } else {
+        // Если это не основное устройство, получаем ID из хранилища
+        setMainDeviceId(localStorage.getItem(MAIN_DEVICE_KEY))
+      }
+      
       // Получаем список устройств из localStorage
       const storedDevices = localStorage.getItem(DEVICES_STORAGE_KEY)
       if (storedDevices) {
@@ -88,7 +110,9 @@ export const useDeviceAuth = (): DeviceAuthHook => {
           localStorage.setItem(DEVICES_STORAGE_KEY, JSON.stringify(validDevices));
         }
         
+        // Устанавливаем список устройств и обновляем оставшееся количество слотов
         setAuthorizedDevices(validDevices)
+        setRemainingSlots(MAX_DEVICES - validDevices.length)
       }
       
       // Проверяем, является ли текущее устройство "шаренным"
@@ -107,13 +131,20 @@ export const useDeviceAuth = (): DeviceAuthHook => {
   const saveDevices = useCallback((devices: DeviceInfo[]) => {
     try {
       localStorage.setItem(DEVICES_STORAGE_KEY, JSON.stringify(devices))
+      setRemainingSlots(MAX_DEVICES - devices.length)
     } catch (e) {
       console.error('Ошибка при сохранении данных об устройствах:', e)
     }
   }, [])
   
   // Авторизация нового устройства
-  const authorizeDevice = useCallback((iin: string, password: string): DeviceInfo => {
+  const authorizeDevice = useCallback((iin: string, password: string): DeviceInfo | null => {
+    // Проверяем, не превышен ли лимит устройств
+    if (authorizedDevices.length >= MAX_DEVICES) {
+      console.error('Достигнут максимальный лимит устройств (5)')
+      return null
+    }
+    
     const now = new Date()
     const deviceId = uuidv4()
     
@@ -165,6 +196,12 @@ export const useDeviceAuth = (): DeviceAuthHook => {
         return ''
       }
       
+      // Проверяем, не превышен ли лимит устройств
+      if (authorizedDevices.length >= MAX_DEVICES) {
+        console.error('Достигнут максимальный лимит устройств (5)')
+        return 'limit_exceeded'
+      }
+      
       // Получаем данные из localStorage
       const iin = localStorage.getItem('user-iin')
       const password = localStorage.getItem('user-password')
@@ -181,11 +218,19 @@ export const useDeviceAuth = (): DeviceAuthHook => {
           // Создаем устройство с тестовыми данными
           const deviceInfo = authorizeDevice(testIin, testPassword)
           
+          if (!deviceInfo) {
+            return 'limit_exceeded'
+          }
+          
           // Формируем тестовые данные для передачи
           const demoAuthData = {
             iin: testIin,
             password: testPassword,
-            deviceId: deviceInfo.id
+            deviceId: deviceInfo.id,
+            sourceDevice: {
+              name: getBrowserInfo(),
+              id: mainDeviceId || 'unknown'
+            }
           }
           
           return JSON.stringify(demoAuthData)
@@ -197,11 +242,19 @@ export const useDeviceAuth = (): DeviceAuthHook => {
       // Создаем новое устройство
       const deviceInfo = authorizeDevice(iin, password)
       
+      if (!deviceInfo) {
+        return 'limit_exceeded'
+      }
+      
       // Формируем данные для передачи
       const authData = {
         iin,
         password,
-        deviceId: deviceInfo.id
+        deviceId: deviceInfo.id,
+        sourceDevice: {
+          name: getBrowserInfo(),
+          id: mainDeviceId || 'unknown'
+        }
       }
       
       return JSON.stringify(authData)
@@ -209,7 +262,7 @@ export const useDeviceAuth = (): DeviceAuthHook => {
       console.error('Ошибка при подготовке данных аутентификации:', e)
       return ''
     }
-  }, [authorizeDevice, isCurrentDeviceShared])
+  }, [authorizeDevice, isCurrentDeviceShared, authorizedDevices.length, mainDeviceId])
   
   // Обновление времени последнего доступа для текущего устройства
   const updateCurrentDeviceTimestamp = useCallback(() => {
@@ -254,6 +307,7 @@ export const useDeviceAuth = (): DeviceAuthHook => {
     revokeDevice,
     prepareAuthData,
     isCurrentDeviceShared,
-    canAuthorizeOthers
+    canAuthorizeOthers,
+    remainingSlots
   }
 } 

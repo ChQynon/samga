@@ -21,14 +21,19 @@ import {
   DialogHeader, 
   DialogTitle 
 } from '@/components/ui/dialog'
-import { Spinner, Trash, PhoneSlash, QrCode, CheckCircle } from '@phosphor-icons/react'
+import { Spinner, Trash, PhoneSlash, QrCode, CheckCircle, Warning } from '@phosphor-icons/react'
 import { Phone as Smartphone } from '@phosphor-icons/react'
 import { useToast } from '@/lib/providers/ToastProvider'
 import { QRCodeSVG } from 'qrcode.react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
+interface SourceDevice {
+  name: string;
+  id: string;
+}
+
 const DeviceAuthorization = () => {
-  const { authorizedDevices, revokeDevice, prepareAuthData, isCurrentDeviceShared, canAuthorizeOthers } = useDeviceAuth()
+  const { authorizedDevices, revokeDevice, prepareAuthData, isCurrentDeviceShared, canAuthorizeOthers, remainingSlots } = useDeviceAuth()
   const { isAvailable, startWriting, status, error } = useNFC()
   const { showToast } = useToast()
   
@@ -39,9 +44,16 @@ const DeviceAuthorization = () => {
   const [activeTab, setActiveTab] = useState<string>(isAvailable ? 'nfc' : 'qr')
   const [showSuccess, setShowSuccess] = useState(false)
   const [lastConnectedDevice, setLastConnectedDevice] = useState<DeviceInfo | null>(null)
+  const [sourceDevice, setSourceDevice] = useState<SourceDevice | null>(null)
   
   // Начать процесс авторизации (общий метод)
   const handleStartAuth = async () => {
+    // Если достигнут лимит устройств
+    if (remainingSlots <= 0) {
+      showToast(`Достигнут лимит в 5 устройств. Отзовите доступ у неиспользуемых устройств.`, 'error')
+      return
+    }
+    
     // Если текущее устройство авторизовано через другое устройство, запрещаем авторизацию
     if (!canAuthorizeOthers) {
       showToast('Нельзя авторизовать другие устройства с устройства, которое само было авторизовано', 'error')
@@ -51,10 +63,11 @@ const DeviceAuthorization = () => {
     setIsNFCDialogOpen(true)
     setShowSuccess(false)
     setLastConnectedDevice(null)
+    setSourceDevice(null)
     
     try {
       const authData = prepareAuthData()
-      if (authData) {
+      if (authData && authData !== 'limit_exceeded') {
         setAuthQrData(authData)
         
         if (isAvailable && activeTab === 'nfc') {
@@ -75,10 +88,19 @@ const DeviceAuthorization = () => {
               timestamp: new Date().getTime()
             }
             setLastConnectedDevice(dummyDevice)
+            
+            // Имитация информации об источнике
+            setSourceDevice({
+              name: 'Chrome на Windows (Текущее устройство)',
+              id: 'main-device'
+            })
+            
             setShowSuccess(true)
           }, 5000) // Показываем через 5 секунд для демонстрации
         }
-        
+      } else if (authData === 'limit_exceeded') {
+        showToast(`Достигнут лимит в 5 устройств. Отзовите доступ у неиспользуемых устройств.`, 'error')
+        setIsNFCDialogOpen(false)
       } else {
         showToast('Не удалось подготовить данные для передачи. Возможно, вы не вошли в систему или не сохранили данные при входе.', 'error')
         // Не закрываем диалог, показываем сообщение об ошибке
@@ -98,6 +120,19 @@ const DeviceAuthorization = () => {
       if (lastDevice) {
         setLastConnectedDevice(lastDevice)
         setShowSuccess(true)
+        
+        // Попытка извлечь информацию об устройстве-источнике из localStorage
+        try {
+          const authDataJson = localStorage.getItem('last-auth-source')
+          if (authDataJson) {
+            const authData = JSON.parse(authDataJson)
+            if (authData.sourceDevice) {
+              setSourceDevice(authData.sourceDevice)
+            }
+          }
+        } catch (error) {
+          console.error('Ошибка при получении информации об устройстве-источнике:', error)
+        }
       }
     }
   }, [authorizedDevices, isNFCDialogOpen])
@@ -128,6 +163,7 @@ const DeviceAuthorization = () => {
         <h3 className="text-lg font-medium">Устройства с доступом к аккаунту</h3>
         <p className="text-sm text-muted-foreground">
           Здесь вы можете управлять устройствами, которым был предоставлен доступ к вашему аккаунту.
+          Максимальное количество устройств: 5.
         </p>
       </div>
       
@@ -141,6 +177,24 @@ const DeviceAuthorization = () => {
           </p>
         </div>
       )}
+      
+      {/* Информация о лимите устройств */}
+      <div className="rounded-lg border p-4 flex justify-between items-center">
+        <div>
+          <p className="text-sm font-medium">Подключенные устройства</p>
+          <p className="text-xs text-muted-foreground">
+            {authorizedDevices.length} из 5 устройств используются
+          </p>
+        </div>
+        <div className="flex items-center gap-1">
+          {Array(5).fill(0).map((_, index) => (
+            <div 
+              key={index} 
+              className={`w-2 h-5 rounded-sm ${index < authorizedDevices.length ? 'bg-primary' : 'bg-muted'}`}
+            ></div>
+          ))}
+        </div>
+      </div>
       
       {/* Список авторизованных устройств */}
       {authorizedDevices.length > 0 ? (
@@ -181,9 +235,10 @@ const DeviceAuthorization = () => {
         <Button
           onClick={handleStartAuth}
           className="w-full"
-          disabled={!canAuthorizeOthers}
+          disabled={!canAuthorizeOthers || remainingSlots <= 0}
         >
           Авторизовать новое устройство
+          {remainingSlots > 0 && <span className="ml-2 text-xs">({remainingSlots} из 5 доступно)</span>}
         </Button>
       </div>
       
@@ -300,6 +355,15 @@ const DeviceAuthorization = () => {
                   <p className="text-xs text-muted-foreground">
                     Устройство получило доступ {lastConnectedDevice.lastAccess}
                   </p>
+                  
+                  {sourceDevice && (
+                    <div className="mt-2 pt-2 border-t border-slate-200">
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <span>Авторизовано через:</span>
+                        <span className="font-medium">{sourceDevice.name}</span>
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
               
