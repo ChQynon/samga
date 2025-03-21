@@ -9,7 +9,6 @@ import { env } from '@/env'
 
 // Импортируем middleware из отдельного файла
 import authMiddleware from '@/server/middleware/auth'
-export { authMiddleware }
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
