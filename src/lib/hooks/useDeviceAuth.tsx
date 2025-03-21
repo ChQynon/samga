@@ -83,7 +83,8 @@ export const useDeviceAuth = (): DeviceAuthHook => {
   useEffect(() => {
     try {
       // Проверяем, является ли это устройство основным
-      const isMainDevice = !localStorage.getItem(MAIN_DEVICE_KEY)
+      const storedMainDeviceId = localStorage.getItem(MAIN_DEVICE_KEY);
+      const isMainDevice = !storedMainDeviceId;
       
       // Если это первый запуск и это основное устройство, сгенерируем ID
       if (isMainDevice) {
@@ -92,7 +93,7 @@ export const useDeviceAuth = (): DeviceAuthHook => {
         setMainDeviceId(deviceId)
       } else {
         // Если это не основное устройство, получаем ID из хранилища
-        setMainDeviceId(localStorage.getItem(MAIN_DEVICE_KEY))
+        setMainDeviceId(storedMainDeviceId)
       }
       
       // Получаем список устройств из localStorage
@@ -215,18 +216,21 @@ export const useDeviceAuth = (): DeviceAuthHook => {
           const testIin = '123456789012'
           const testPassword = 'password123'
           
-          // Создаем устройство с тестовыми данными
-          const deviceInfo = authorizeDevice(testIin, testPassword)
-          
-          if (!deviceInfo) {
-            return 'limit_exceeded'
+          // Создаем временную информацию об устройстве без добавления в список авторизованных
+          const deviceId = uuidv4()
+          const tempDeviceInfo = {
+            id: deviceId,
+            name: getBrowserInfo(),
+            browser: navigator.userAgent,
+            lastAccess: new Date().toLocaleString('ru'),
+            timestamp: new Date().getTime()
           }
           
           // Формируем тестовые данные для передачи
           const demoAuthData = {
             iin: testIin,
             password: testPassword,
-            deviceId: deviceInfo.id,
+            deviceId: deviceId,
             sourceDevice: {
               name: getBrowserInfo(),
               id: mainDeviceId || 'unknown'
@@ -239,18 +243,14 @@ export const useDeviceAuth = (): DeviceAuthHook => {
         return ''
       }
       
-      // Создаем новое устройство
-      const deviceInfo = authorizeDevice(iin, password)
-      
-      if (!deviceInfo) {
-        return 'limit_exceeded'
-      }
+      // Создаем временный ID для нового устройства без добавления в список
+      const deviceId = uuidv4()
       
       // Формируем данные для передачи
       const authData = {
         iin,
         password,
-        deviceId: deviceInfo.id,
+        deviceId: deviceId,
         sourceDevice: {
           name: getBrowserInfo(),
           id: mainDeviceId || 'unknown'
@@ -262,7 +262,7 @@ export const useDeviceAuth = (): DeviceAuthHook => {
       console.error('Ошибка при подготовке данных аутентификации:', e)
       return ''
     }
-  }, [authorizeDevice, isCurrentDeviceShared, authorizedDevices.length, mainDeviceId])
+  }, [isCurrentDeviceShared, authorizedDevices.length, mainDeviceId])
   
   // Обновление времени последнего доступа для текущего устройства
   const updateCurrentDeviceTimestamp = useCallback(() => {

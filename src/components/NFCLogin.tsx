@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
-import { useNFC, NDEFReaderEventResult } from '@/lib/hooks/useNFC'
+import { useNFC, NDEFReaderEventResult, DeviceInfo } from '@/lib/hooks/useNFC'
 import { Spinner, X, QrCode, ArrowsClockwise, Camera } from '@phosphor-icons/react'
 import {
   Dialog,
@@ -17,9 +17,21 @@ import QrScanner from 'react-qr-scanner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useToast } from '@/components/ui/use-toast'
-import { signIn } from '@/server/actions/signin'
+import { useToast } from '@/lib/providers/ToastProvider'
 import { LoadingIcon } from './icons'
+
+// Интерфейс для взаимодействия с сервером
+interface SignInResult {
+  success: boolean
+  error?: string
+}
+
+// Имитация функции входа
+const signIn = async (credentials: { iin: string, password: string }): Promise<SignInResult> => {
+  // В реальной реализации здесь будет вызов API
+  console.log('Выполняем вход с данными:', credentials)
+  return { success: true }
+}
 
 type AuthData = {
   iin: string
@@ -31,6 +43,40 @@ interface NFCLoginProps {
   onAuthReceived: (iin: string, password: string, deviceId: string) => void
 }
 
+// Функция для получения информации о браузере
+const getBrowserInfo = (): string => {
+  const userAgent = navigator.userAgent
+  let browserName = 'Неизвестный браузер'
+  
+  if (userAgent.indexOf('Chrome') > -1) {
+    browserName = 'Chrome'
+  } else if (userAgent.indexOf('Firefox') > -1) {
+    browserName = 'Firefox'
+  } else if (userAgent.indexOf('Safari') > -1) {
+    browserName = 'Safari'
+  } else if (userAgent.indexOf('Opera') > -1 || userAgent.indexOf('OPR') > -1) {
+    browserName = 'Opera'
+  } else if (userAgent.indexOf('Edge') > -1 || userAgent.indexOf('Edg') > -1) {
+    browserName = 'Edge'
+  }
+  
+  // Определение ОС
+  let osName = 'Неизвестная ОС'
+  if (userAgent.indexOf('Win') > -1) {
+    osName = 'Windows'
+  } else if (userAgent.indexOf('Mac') > -1) {
+    osName = 'MacOS'
+  } else if (userAgent.indexOf('Linux') > -1) {
+    osName = 'Linux'
+  } else if (userAgent.indexOf('Android') > -1) {
+    osName = 'Android'
+  } else if (userAgent.indexOf('iOS') > -1 || userAgent.indexOf('iPhone') > -1 || userAgent.indexOf('iPad') > -1) {
+    osName = 'iOS'
+  }
+  
+  return `${browserName} на ${osName}`
+}
+
 const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
   const { isAvailable, startReading, status, stopNFC, startScan, isScanning, isSupported } = useNFC()
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -38,7 +84,7 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
   const [scanError, setScanError] = useState<string | null>(null)
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment')
   const [key, setKey] = useState<number>(0)
-  const { toast } = useToast()
+  const { showToast: toast } = useToast()
   const [qrValue, setQrValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
@@ -46,6 +92,35 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
     const handleAuthData = (event: Event) => {
       const customEvent = event as CustomEvent<AuthData>
       const { iin, password, deviceId } = customEvent.detail
+      
+      // Добавляем устройство в список авторизованных
+      try {
+        // Получаем текущий список устройств
+        const storedDevices = localStorage.getItem('samga-authorized-devices') || '[]'
+        const devices = JSON.parse(storedDevices) as DeviceInfo[]
+        
+        // Создаем новое устройство
+        const now = new Date()
+        const newDevice: DeviceInfo = {
+          id: deviceId,
+          name: getBrowserInfo(),
+          browser: navigator.userAgent,
+          lastAccess: now.toLocaleString('ru'),
+          timestamp: now.getTime()
+        }
+        
+        // Проверяем, не превышен ли лимит (5 устройств)
+        if (devices.length >= 5) {
+          toast('Вы достигли максимального количества подключенных устройств (5)', 'error')
+          return
+        }
+        
+        // Добавляем новое устройство
+        devices.push(newDevice)
+        localStorage.setItem('samga-authorized-devices', JSON.stringify(devices))
+      } catch (e) {
+        console.error('Ошибка при добавлении устройства в список:', e)
+      }
       
       setDialogOpen(false)
       
@@ -57,7 +132,7 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
     return () => {
       window.removeEventListener('nfc-auth-data', handleAuthData)
     }
-  }, [onAuthReceived])
+  }, [onAuthReceived, toast])
   
   const handleStartScanning = async () => {
     setDialogOpen(true)
@@ -140,25 +215,14 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
       })
 
       if (result.success) {
-        toast({
-          title: 'Успешная авторизация',
-          description: 'Вы успешно вошли в систему'
-        })
+        toast('Успешная авторизация', 'success')
         window.location.href = '/dashboard'
       } else {
-        toast({
-          variant: 'destructive',
-          title: 'Ошибка авторизации',
-          description: result.error || 'Не удалось войти в систему'
-        })
+        toast('Ошибка авторизации', 'error')
       }
     } catch (error) {
       console.error('Ошибка при обработке аутентификации:', error)
-      toast({
-        variant: 'destructive',
-        title: 'Ошибка',
-        description: 'Произошла ошибка при авторизации'
-      })
+      toast('Произошла ошибка при авторизации', 'error')
     } finally {
       setIsLoading(false)
     }
@@ -184,11 +248,7 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
         }
       } catch (error) {
         console.error('Ошибка при обработке NFC данных:', error)
-        toast({
-          variant: 'destructive',
-          title: 'Ошибка NFC',
-          description: 'Не удалось прочитать данные с устройства'
-        })
+        toast('Ошибка NFC', 'error')
       }
     },
     [handleAuth]
@@ -197,11 +257,7 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
   // Запускаем сканирование NFC при нажатии на кнопку
   const handleStartNFC = useCallback(() => {
     if (!isSupported) {
-      toast({
-        variant: 'destructive',
-        title: 'NFC не поддерживается',
-        description: 'Ваше устройство не поддерживает NFC или браузер не имеет доступа к этой функции'
-      })
+      toast('NFC не поддерживается', 'error')
       return
     }
 
