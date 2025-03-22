@@ -10,7 +10,7 @@
     "lint": "next lint",
     "build:static": "cross-env BUILD_TYPE=static next build",
     "export": "cross-env BUILD_TYPE=static next build && next export",
-    "static-export": "node simple-export.js",
+    "static-export": "node simple-export.mjs",
     "build:web": "next build",
     "predeploy": "npm run lint:fix && npm run build:web",
     "lint:fix": "next lint --fix",

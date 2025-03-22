@@ -26,7 +26,7 @@ const nextConfig = {
           webpackBuildWorker: true,
           // Добавляем новые опции для улучшения экспорта
           clientRouterFilter: true,
-          optimizePackageImports: true
+          optimizePackageImports: ['@phosphor-icons/react', 'lucide-react', '@tanstack/react-query']
         },
         distDir: '.next',
         // Отключаем генерацию ETag заголовков
@@ -48,7 +48,7 @@ const nextConfig = {
         experimental: {
           webpackBuildWorker: true,
           clientRouterFilter: true,
-          optimizePackageImports: true
+          optimizePackageImports: ['@phosphor-icons/react', 'lucide-react', '@tanstack/react-query']
         }
       }
   ),
