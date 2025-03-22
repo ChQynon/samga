@@ -410,14 +410,23 @@ const NFCLogin = () => {
   // Функция сохранения информации об устройстве
   const saveDeviceInfo = (deviceId: string, isCurrentDevice: boolean = false) => {
     try {
+      console.log('Начинаем сохранение устройства:', deviceId);
+      
       let devices: any[] = [];
       const storedDevices = localStorage.getItem('samga-authorized-devices');
       
       if (storedDevices) {
-        devices = JSON.parse(storedDevices);
+        try {
+          devices = JSON.parse(storedDevices);
+          console.log('Загружены существующие устройства:', devices.length);
+        } catch (parseError) {
+          console.error('Ошибка парсинга списка устройств:', parseError);
+          // Создаем новый массив если не удалось распарсить
+          devices = [];
+        }
       }
       
-      // Определяем информацию об устройстве
+      // Определяем информацию об устройстве - КРИТИЧЕСКИ ВАЖНО для отображения в списке!
       const deviceInfo = {
         id: deviceId,
         name: getBrowserInfo(),
@@ -427,13 +436,14 @@ const NFCLogin = () => {
         isCurrent: isCurrentDevice
       };
       
-      console.log('Добавляем устройство в список:', deviceInfo);
+      console.log('Подготовлена информация для сохранения:', deviceInfo);
       
       // Обновляем или добавляем устройство
       const existingIndex = devices.findIndex(d => d && d.id === deviceId);
       
       if (existingIndex !== -1) {
         // Обновляем существующее
+        console.log('Обновляем существующее устройство с индексом:', existingIndex);
         devices[existingIndex] = {
           ...devices[existingIndex],
           ...deviceInfo,
@@ -442,24 +452,56 @@ const NFCLogin = () => {
         };
       } else if (devices.length >= 5) {
         // Ограничение в 5 устройств - заменяем самое старое
+        console.log('Достигнут лимит устройств, заменяем старое');
         devices.sort((a, b) => a.timestamp - b.timestamp);
         devices[0] = deviceInfo;
       } else {
         // Добавляем новое
+        console.log('Добавляем новое устройство в список');
         devices.push(deviceInfo);
       }
       
-      // Сохраняем обновленный список
-      localStorage.setItem('samga-authorized-devices', JSON.stringify(devices));
-      console.log('Сохранено устройство:', deviceInfo);
-      console.log('Текущий список устройств:', devices);
+      // СОХРАНЯЕМ ОБЯЗАТЕЛЬНО ВСЕ УСТРОЙСТВА
+      try {
+        const dataToSave = JSON.stringify(devices);
+        localStorage.setItem('samga-authorized-devices', dataToSave);
+        console.log('Сохранен список устройств в localStorage:', devices.length, 'устройств');
+        console.log('Размер данных:', dataToSave.length, 'байт');
+      } catch (saveError) {
+        console.error('Ошибка при сохранении списка устройств:', saveError);
+      }
       
       // Если это текущее устройство, отдельно сохраняем его ID
       if (isCurrentDevice) {
         localStorage.setItem('samga-current-device-id', deviceId);
+        console.log('Устройство отмечено как текущее:', deviceId);
+        
+        // Дублируем информацию в другой ключ для безопасности
+        try {
+          localStorage.setItem('samga-current-device', JSON.stringify(deviceInfo));
+          console.log('Дополнительное сохранение информации о текущем устройстве');
+        } catch (err) {
+          console.error('Ошибка при дополнительном сохранении:', err);
+        }
       }
+      
+      // Принудительно проверяем, что данные сохранились правильно
+      setTimeout(() => {
+        try {
+          const checkDevices = localStorage.getItem('samga-authorized-devices');
+          if (checkDevices) {
+            const parsedDevices = JSON.parse(checkDevices);
+            console.log('Проверка сохранения - устройств в списке:', parsedDevices.length);
+          } else {
+            console.error('ОШИБКА: Список устройств не найден после сохранения!');
+          }
+        } catch (e) {
+          console.error('Ошибка при проверке сохранения:', e);
+        }
+      }, 500);
+      
     } catch (e) {
-      console.warn('Ошибка при сохранении устройства:', e);
+      console.warn('Критическая ошибка при сохранении устройства:', e);
     }
   };
   

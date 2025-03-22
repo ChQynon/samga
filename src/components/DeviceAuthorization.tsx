@@ -74,21 +74,35 @@ const DeviceAuthorization = () => {
   
   // Форматирование списка устройств с добавлением признака текущего
   const formatDeviceList = (devices: DeviceInfo[] | null): FormattedDevice[] => {
-    if (!devices) return [];
+    if (!devices) {
+      console.log('Нет устройств для форматирования');
+      return [];
+    }
+    
+    console.log('Форматируем список устройств, количество:', devices.length);
     
     // Получаем ID текущего устройства
     let currentDeviceId = null;
     if (typeof window !== 'undefined') {
       try {
         currentDeviceId = localStorage.getItem('samga-current-device-id');
+        console.log('ID текущего устройства:', currentDeviceId);
       } catch (error) {
         console.error('Ошибка при чтении из localStorage:', error);
       }
     }
     
-    return devices.map(device => {
+    // Логируем все устройства для отладки
+    devices.forEach((device, index) => {
+      console.log(`Устройство ${index+1}:`, device.id, device.name);
+    });
+    
+    const formattedList = devices.map(device => {
       // Флаг текущего устройства
       const isCurrent = device.id === currentDeviceId;
+      if (isCurrent) {
+        console.log('Найдено текущее устройство:', device.id);
+      }
       
       return {
         ...device,
@@ -96,10 +110,44 @@ const DeviceAuthorization = () => {
         isCurrent // Добавляем признак текущего устройства
       };
     });
+    
+    console.log('Форматирование завершено, форматированных устройств:', formattedList.length);
+    return formattedList;
   };
   
   // Получаем форматированный список устройств
   const formattedDevices = formatDeviceList(authorizedDevices);
+  
+  // Принудительная перезагрузка списка устройств из localStorage при монтировании компонента
+  useEffect(() => {
+    try {
+      console.log('Принудительная перезагрузка списка устройств');
+      const storedDevices = localStorage.getItem('samga-authorized-devices');
+      if (storedDevices) {
+        try {
+          const devices = JSON.parse(storedDevices);
+          console.log('Загружено устройств напрямую из localStorage:', devices.length);
+          
+          // Проверяем, что это массив
+          if (Array.isArray(devices) && devices.length > 0) {
+            console.log('Устройства найдены в localStorage:', devices.length);
+            // Отладочная информация о первом устройстве
+            if (devices[0]) {
+              console.log('Пример устройства:', devices[0].id, devices[0].name);
+            }
+          } else {
+            console.warn('В localStorage нет устройств или данные повреждены');
+          }
+        } catch (e) {
+          console.error('Ошибка при парсинге устройств из localStorage:', e);
+        }
+      } else {
+        console.log('В localStorage нет сохраненных устройств');
+      }
+    } catch (e) {
+      console.error('Ошибка при прямом чтении из localStorage:', e);
+    }
+  }, []);
   
   // Начать процесс авторизации (общий метод)
   const handleStartAuth = async () => {
