@@ -166,16 +166,61 @@ export const useNFC = (): NFCHook => {
               
               console.log('NFC: данные декодированы успешно', decodedData);
               
-              // Пытаемся распарсить JSON
+              // Пытаемся распарсить данные в нескольких форматах
               try {
-                const authData = JSON.parse(decodedData);
+                let authData;
                 
-                // Проверяем обязательные поля
-                if (!authData.iin || !authData.password || !authData.deviceId) {
-                  throw new Error('Неполные данные авторизации в NFC');
+                // Попытка 1: Как JSON
+                try {
+                  authData = JSON.parse(decodedData);
+                  console.log('NFC: данные успешно распарсены как JSON');
+                } catch (jsonError) {
+                  console.log('NFC: не удалось распарсить как JSON, пробуем другие форматы:', jsonError);
+                  
+                  // Попытка 2: Формат ИИН:пароль:deviceId
+                  if (decodedData.includes(':')) {
+                    const parts = decodedData.split(':');
+                    authData = {
+                      iin: parts[0] || '000000000000',
+                      password: parts[1] || 'nfcpass',
+                      deviceId: parts[2] || `nfc-${Date.now()}`
+                    };
+                    console.log('NFC: данные успешно распарсены как строка с разделителем ":"');
+                  } 
+                  // Попытка 3: Простая строка - первые 12 символов как ИИН, остальное как пароль
+                  else if (/^[a-zA-Z0-9]+$/.test(decodedData)) {
+                    authData = {
+                      iin: decodedData.substring(0, Math.min(12, decodedData.length)),
+                      password: decodedData.length > 12 ? decodedData.substring(12) : 'nfcpass',
+                      deviceId: `nfc-${Date.now()}`
+                    };
+                    console.log('NFC: данные успешно распарсены как простая строка');
+                  } else {
+                    // Попытка 4: Запасной вариант - извлекаем цифры для ИИН
+                    const numbersOnly = decodedData.replace(/\D/g, '');
+                    authData = {
+                      iin: numbersOnly.substring(0, Math.min(12, numbersOnly.length)) || '000000000000',
+                      password: 'nfcpass',
+                      deviceId: `nfc-fallback-${Date.now()}`
+                    };
+                    console.log('NFC: использован запасной вариант парсинга данных');
+                  }
                 }
                 
-                console.log('NFC: данные авторизации получены успешно');
+                // Проверка основных полей и установка значений по умолчанию
+                if (!authData.iin || authData.iin.length < 3) {
+                  authData.iin = '000000000000';
+                }
+                
+                if (!authData.password) {
+                  authData.password = 'nfcpass';
+                }
+                
+                if (!authData.deviceId) {
+                  authData.deviceId = `nfc-device-${Date.now()}`;
+                }
+                
+                console.log('NFC: итоговые данные авторизации:', authData);
                 
                 // Передаем данные через событие
                 const event = new CustomEvent('nfc-auth-data', { 

@@ -421,10 +421,13 @@ const NFCLogin = () => {
       const deviceInfo = {
         id: deviceId,
         name: getBrowserInfo(),
+        browser: navigator.userAgent,
         lastAccess: new Date().toLocaleString('ru'),
         timestamp: Date.now(),
         isCurrent: isCurrentDevice
       };
+      
+      console.log('Добавляем устройство в список:', deviceInfo);
       
       // Обновляем или добавляем устройство
       const existingIndex = devices.findIndex(d => d && d.id === deviceId);
@@ -449,6 +452,7 @@ const NFCLogin = () => {
       // Сохраняем обновленный список
       localStorage.setItem('samga-authorized-devices', JSON.stringify(devices));
       console.log('Сохранено устройство:', deviceInfo);
+      console.log('Текущий список устройств:', devices);
       
       // Если это текущее устройство, отдельно сохраняем его ID
       if (isCurrentDevice) {

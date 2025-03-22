@@ -40,9 +40,6 @@ const Header = () => {
         </div>
       </div>
       <div className="flex items-center gap-2">
-        {!isError && contingent && (
-          <Logout variant="outline" buttonText="Выйти" showIcon={true} />
-        )}
         <RefreshButton />
       </div>
     </header>

@@ -52,7 +52,7 @@ const Page = () => {
   }
 
   return (
-    <div className="mx-auto">
+    <div className="mx-auto page-transition">
       <h2 className="scroll-m-20 pb-2 text-3xl font-semibold leading-tight tracking-tight first:mt-0">
         Настройки
       </h2>
