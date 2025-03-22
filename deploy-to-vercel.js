@@ -49,6 +49,17 @@ android.keystore
 
 // Запуск деплоя
 console.log('🔄 Запуск деплоя на Vercel...');
+
+// Запускаем сборку для веб-приложения
+console.log('📦 Создание веб-сборки...');
+try {
+  execSync('npm run build:web', { stdio: 'inherit' });
+} catch (buildError) {
+  console.error('❌ Ошибка при создании веб-сборки:', 
+    buildError instanceof Error ? buildError.message : String(buildError));
+  process.exit(1);
+}
+
 try {
   execSync('vercel --prod', { stdio: 'inherit' });
   console.log('✅ Деплой успешно завершен!');

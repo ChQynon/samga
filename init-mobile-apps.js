@@ -9,6 +9,9 @@ import path from 'path';
 
 console.log('Инициализация мобильных приложений SAMGA для iOS и Android...');
 
+// Проверяем, является ли платформа Windows
+const isWindows = process.platform === 'win32';
+
 // Проверка зависимостей
 try {
   console.log('Проверка установленных зависимостей...');
@@ -93,7 +96,11 @@ export default config;`;
 // Создание статического билда
 console.log('Сборка статической версии приложения...');
 try {
-  execSync('npm run build', { stdio: 'inherit' });
+  // Используем статический тип сборки с учетом платформы
+  execSync(isWindows 
+    ? 'set BUILD_TYPE=static && npm run build' 
+    : 'npm run build:static', 
+    { stdio: 'inherit', env: { ...process.env, BUILD_TYPE: 'static' } });
   
   // Проверяем, есть ли директория out
   if (!fs.existsSync('./out')) {
