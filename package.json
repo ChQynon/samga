@@ -9,6 +9,8 @@
     "start": "next start",
     "lint": "next lint",
     "build:static": "cross-env BUILD_TYPE=static next build",
+    "export": "cross-env BUILD_TYPE=static next build && next export",
+    "static-export": "node simple-export.js",
     "build:web": "next build",
     "predeploy": "npm run lint:fix && npm run build:web",
     "lint:fix": "next lint --fix",
@@ -20,8 +22,8 @@
     "capacitor:add:ios": "capacitor add ios",
     "capacitor:open:android": "capacitor open android",
     "capacitor:open:ios": "capacitor open ios",
-    "capacitor:build:android": "npm run build:static && capacitor sync android && cd android && ./gradlew assembleDebug",
-    "capacitor:build:ios": "npm run build:static && capacitor sync ios && cd ios && xcodebuild -scheme App -configuration Debug -sdk iphonesimulator",
+    "capacitor:build:android": "npm run static-export && capacitor sync android && cd android && ./gradlew assembleDebug",
+    "capacitor:build:ios": "npm run static-export && capacitor sync ios && cd ios && xcodebuild -scheme App -configuration Debug -sdk iphonesimulator",
     "init:mobile": "node init-mobile-apps.js"
   },
   "dependencies": {

@@ -96,11 +96,11 @@ export default config;`;
 // Создание статического билда
 console.log('Сборка статической версии приложения...');
 try {
-  // Используем статический тип сборки с учетом платформы
-  execSync(isWindows 
-    ? 'set BUILD_TYPE=static && npm run build' 
-    : 'npm run build:static', 
-    { stdio: 'inherit', env: { ...process.env, BUILD_TYPE: 'static' } });
+  // Используем наш новый custom скрипт статического экспорта
+  execSync('npm run static-export', { 
+    stdio: 'inherit',
+    env: { ...process.env, BUILD_TYPE: 'static' } 
+  });
   
   // Проверяем, есть ли директория out
   if (!fs.existsSync('./out')) {
@@ -108,6 +108,27 @@ try {
     console.log('Возможно, неправильно настроен Next.js config или скрипт сборки');
     process.exit(1);
   }
+  
+  // Добавляем стандартные файлы для Capacitor, если их нет
+  if (!fs.existsSync('./out/index.html')) {
+    console.log('Создание базового index.html для Capacitor...');
+    const indexHtml = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SAMGA</title>
+</head>
+<body>
+  <div id="__next"></div>
+  <script>
+    window.location.href = '/';
+  </script>
+</body>
+</html>`;
+    fs.writeFileSync('./out/index.html', indexHtml);
+  }
+  
   console.log('✅ Статическая сборка создана');
 } catch (err) {
   const error = err instanceof Error ? err : new Error(String(err));

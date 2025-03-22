@@ -13,20 +13,42 @@ const nextConfig = {
         output: 'export',
         // Обходим ограничения с изображениями для статического экспорта
         images: {
-          unoptimized: true
+          unoptimized: true,
+          remotePatterns: [
+            {
+              protocol: 'https',
+              hostname: '**',
+            },
+          ],
         },
-        // Исключаем API маршруты для статической сборки
+        // Исключаем API маршруты для статической сборки и настраиваем дополнительные опции
         experimental: {
-          webpackBuildWorker: true
-        }
+          webpackBuildWorker: true,
+          // Добавляем новые опции для улучшения экспорта
+          clientRouterFilter: true,
+          optimizePackageImports: true
+        },
+        distDir: '.next',
+        // Отключаем генерацию ETag заголовков
+        generateEtags: false,
+        // Отключаем trailing slash
+        trailingSlash: false
       }
     : {
         // Конфигурация для обычного веб-приложения
         images: {
-          domains: ['app.samga.kz']
+          domains: ['app.samga.kz'],
+          remotePatterns: [
+            {
+              protocol: 'https',
+              hostname: '**',
+            },
+          ],
         },
         experimental: {
-          webpackBuildWorker: true
+          webpackBuildWorker: true,
+          clientRouterFilter: true,
+          optimizePackageImports: true
         }
       }
   ),
