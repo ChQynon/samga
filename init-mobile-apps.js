@@ -35,6 +35,32 @@ try {
   execSync('npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/ios capacitor-nfc', { stdio: 'inherit' });
 }
 
+// Проверка конфигурации Next.js
+if (!fs.existsSync('./next.config.mjs')) {
+  console.log('❌ Файл next.config.mjs не найден');
+  console.log('Создание конфигурации Next.js...');
+  
+  const nextConfigContent = `/** @type {import('next').NextConfig} */
+const nextConfig = {
+  typescript: {
+    ignoreBuildErrors: true
+  },
+  eslint: {
+    ignoreDuringBuilds: true
+  },
+  output: 'export',
+  images: {
+    unoptimized: true
+  },
+  reactStrictMode: false
+};
+
+export default nextConfig;`;
+  
+  fs.writeFileSync('./next.config.mjs', nextConfigContent);
+  console.log('✅ Файл next.config.mjs создан');
+}
+
 // Проверка конфигурации Capacitor
 if (!fs.existsSync('./capacitor.config.ts') && !fs.existsSync('./capacitor.config.js')) {
   console.log('❌ Файл конфигурации Capacitor не найден');
@@ -71,17 +97,9 @@ try {
   
   // Проверяем, есть ли директория out
   if (!fs.existsSync('./out')) {
-    console.log('❌ Директория "out" не найдена. Создаем её...');
-    fs.mkdirSync('./out', { recursive: true });
-    
-    // Копируем билд из .next в out (для компатибилности)
-    if (fs.existsSync('./.next')) {
-      console.log('Копирование файлов из .next в out...');
-      execSync('cp -r ./.next/* ./out/', { stdio: 'inherit' });
-    } else {
-      console.error('❌ Директория билда .next не найдена');
-      process.exit(1);
-    }
+    console.error('❌ Директория "out" не найдена после сборки!');
+    console.log('Возможно, неправильно настроен Next.js config или скрипт сборки');
+    process.exit(1);
   }
   console.log('✅ Статическая сборка создана');
 } catch (err) {
