@@ -1,6 +1,22 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
+import { useNativePlatform } from './useNativePlatform'
+
+// NDEFReader доступен только в определенных браузерах
+declare global {
+  interface Window {
+    NDEFReader?: any
+    // Capacitor плагины
+    CapacitorNFC?: {
+      startScan: (options?: any) => Promise<void>
+      stopScan: () => Promise<void>
+      write: (options: { text: string }) => Promise<void>
+      addListener: (event: string, callback: (data: any) => void) => Promise<void>
+      removeAllListeners: () => Promise<void>
+    }
+  }
+}
 
 // Тип для статуса NFC
 type NFCStatus = 'idle' | 'reading' | 'writing' | 'error' | 'ready' | 'not-started'
@@ -25,7 +41,8 @@ export interface NFCHook {
   status: NFCStatus
   error: Error | null
   startReading: () => Promise<void>
-  startWriting: (message: string) => Promise<void>
+  stopReading: () => Promise<void>
+  startWriting: (data: string) => Promise<void>
   stopNFC: () => void
   isSupported: boolean
   isScanning: boolean
@@ -46,16 +63,48 @@ export const useNFC = (): NFCHook => {
   const [status, setStatus] = useState<NFCStatus>('idle')
   const [error, setError] = useState<Error | null>(null)
   const [isScanning, setIsScanning] = useState(false)
+  const { isNative, isAndroid, isIOS } = useNativePlatform()
   
-  // Проверяем доступность NFC API при монтировании
+  // Проверка доступности NFC
   useEffect(() => {
-    // Проверка поддержки Web NFC API
-    if ('NDEFReader' in window) {
-      setIsAvailable(true)
-    } else {
-      setIsAvailable(false)
+    const checkAvailability = async () => {
+      try {
+        // Проверка для нативных приложений (Capacitor)
+        if (isNative) {
+          if (window.CapacitorNFC) {
+            setIsAvailable(true)
+            console.log('NFC доступен через Capacitor плагин')
+          } else {
+            console.log('NFC плагин Capacitor не найден')
+            setIsAvailable(false)
+          }
+        } 
+        // Проверка для веб-браузеров
+        else if ('NDEFReader' in window) {
+          setIsAvailable(true)
+          console.log('Web NFC API доступен')
+        } else {
+          console.log('Web NFC API не поддерживается')
+          setIsAvailable(false)
+        }
+      } catch (error) {
+        console.error('Ошибка при проверке NFC:', error)
+        setIsAvailable(false)
+      }
     }
-  }, [])
+    
+    checkAvailability()
+  }, [isNative, isAndroid, isIOS])
+  
+  // Очистка ресурсов при размонтировании
+  useEffect(() => {
+    return () => {
+      // Очистка обработчиков для Capacitor
+      if (isNative && window.CapacitorNFC) {
+        window.CapacitorNFC.removeAllListeners().catch((e) => console.error('Ошибка при удалении слушателей NFC:', e))
+      }
+    }
+  }, [isNative])
   
   // Остановка NFC операций
   const stopNFC = useCallback(() => {
@@ -95,249 +144,136 @@ export const useNFC = (): NFCHook => {
     }
   }, [isAvailable])
   
-  // Начать чтение NFC
+  // Запуск чтения NFC
   const startReading = useCallback(async () => {
-    if (!isAvailable) {
-      setError(new Error('NFC не поддерживается на этом устройстве'))
-      return
-    }
-    
     try {
-      // Сначала очищаем предыдущие ошибки и сбрасываем статус
       setStatus('reading')
       setError(null)
       
-      // В режиме разработки можно имитировать NFC для тестирования
-      if (process.env.NODE_ENV === 'development' && !('NDEFReader' in window)) {
-        console.log('Режим разработки: имитация NFC чтения');
-        
-        // Через 5 секунд сгенерируем тестовые данные
-        setTimeout(() => {
-          const testData = {
-            iin: '123456789012',
-            password: 'test123',
-            deviceId: 'demo-device-' + Math.floor(Math.random() * 100000)
-          };
+      // Используем нативный плагин в мобильных приложениях
+      if (isNative && window.CapacitorNFC) {
+        // Устанавливаем обработчики событий для нативного NFC
+        await window.CapacitorNFC.addListener('nfcTagDiscovered', (event: any) => {
+          console.log('Обнаружена NFC метка через Capacitor:', event)
           
-          // Создаем кастомное событие для имитации NFC
-          const event = new CustomEvent('nfc-auth-data', { detail: testData });
-          window.dispatchEvent(event);
-        }, 5000);
-        
-        return;
-      }
-      
-      // @ts-ignore - Web NFC API может не быть в TypeScript определениях
-      const ndef = new window.NDEFReader()
-      console.log('Запуск NFC сканирования...');
-      
-      try {
-        await ndef.scan();
-        console.log('NFC сканирование активировано успешно');
-        
-        // Обработчик чтения NFC
-        ndef.addEventListener("reading", ({ message, serialNumber }: any) => {
-          console.log('NFC: получено чтение, обработка данных...');
-          
-          // Обработка прочитанных данных
-          try {
-            if (message.records && message.records.length > 0) {
-              const record = message.records[0];
-              let decodedData = '';
-              
-              // Декодируем данные в зависимости от типа записи
-              if (record.recordType === "text") {
-                const textDecoder = new TextDecoder(record.encoding || 'utf-8');
-                decodedData = textDecoder.decode(record.data);
-              } else if (record.recordType === "url") {
-                // Для URL, которые могут содержать параметры
-                const textDecoder = new TextDecoder();
-                decodedData = textDecoder.decode(record.data);
-              } else {
-                // Для любого другого типа данных пробуем декодировать как текст
-                try {
-                  const textDecoder = new TextDecoder();
-                  decodedData = textDecoder.decode(record.data);
-                } catch (e) {
-                  console.error('Ошибка декодирования данных NFC:', e);
-                  throw new Error('Неподдерживаемый формат данных NFC');
-                }
-              }
-              
-              console.log('NFC: данные декодированы успешно', decodedData);
-              
-              // Пытаемся распарсить данные в нескольких форматах
-              try {
-                let authData;
-                
-                // Попытка 1: Как JSON
-                try {
-                  authData = JSON.parse(decodedData);
-                  console.log('NFC: данные успешно распарсены как JSON');
-                } catch (jsonError) {
-                  console.log('NFC: не удалось распарсить как JSON, пробуем другие форматы:', jsonError);
-                  
-                  // Попытка 2: Формат ИИН:пароль:deviceId
-                  if (decodedData.includes(':')) {
-                    const parts = decodedData.split(':');
-                    authData = {
-                      iin: parts[0] || '000000000000',
-                      password: parts[1] || 'nfcpass',
-                      deviceId: parts[2] || `nfc-${Date.now()}`
-                    };
-                    console.log('NFC: данные успешно распарсены как строка с разделителем ":"');
-                  } 
-                  // Попытка 3: Простая строка - первые 12 символов как ИИН, остальное как пароль
-                  else if (/^[a-zA-Z0-9]+$/.test(decodedData)) {
-                    authData = {
-                      iin: decodedData.substring(0, Math.min(12, decodedData.length)),
-                      password: decodedData.length > 12 ? decodedData.substring(12) : 'nfcpass',
-                      deviceId: `nfc-${Date.now()}`
-                    };
-                    console.log('NFC: данные успешно распарсены как простая строка');
-                  } else {
-                    // Попытка 4: Запасной вариант - извлекаем цифры для ИИН
-                    const numbersOnly = decodedData.replace(/\D/g, '');
-                    authData = {
-                      iin: numbersOnly.substring(0, Math.min(12, numbersOnly.length)) || '000000000000',
-                      password: 'nfcpass',
-                      deviceId: `nfc-fallback-${Date.now()}`
-                    };
-                    console.log('NFC: использован запасной вариант парсинга данных');
-                  }
-                }
-                
-                // Проверка основных полей и установка значений по умолчанию
-                if (!authData.iin || authData.iin.length < 3) {
-                  authData.iin = '000000000000';
-                }
-                
-                if (!authData.password) {
-                  authData.password = 'nfcpass';
-                }
-                
-                if (!authData.deviceId) {
-                  authData.deviceId = `nfc-device-${Date.now()}`;
-                }
-                
-                console.log('NFC: итоговые данные авторизации:', authData);
-                
-                // Передаем данные через событие
-                const event = new CustomEvent('nfc-auth-data', { 
-                  detail: authData 
-                });
-                window.dispatchEvent(event);
-                
-                // Сбрасываем статус после успешного чтения
-                setStatus('idle');
-              } catch (e) {
-                console.error('Ошибка парсинга данных NFC:', e);
-                throw new Error('Неверный формат данных в NFC-метке');
-              }
-            } else {
-              throw new Error('NFC-метка не содержит данных');
-            }
-          } catch (e) {
-            console.error('Ошибка при обработке NFC данных:', e);
-            setError(e instanceof Error ? e : new Error('Ошибка чтения NFC'));
-            setStatus('error');
+          // Извлекаем текст из метки
+          if (event.tag && event.tag.textRecords && event.tag.textRecords.length > 0) {
+            const text = event.tag.textRecords[0]
             
-            // Автоматический перезапуск сканирования через 3 секунды после ошибки
-            setTimeout(() => {
-              startReading();
-            }, 3000);
+            // Генерируем событие для обработки в приложении
+            window.dispatchEvent(new CustomEvent('nfc-auth-data', { 
+              detail: JSON.parse(text)
+            }))
           }
-        });
+        })
         
-        // Обработчик ошибок NFC
-        ndef.addEventListener("error", (e: any) => {
-          console.error('Ошибка NFC сканера:', e);
-          const errorMessage = e.message || 'Ошибка при сканировании NFC';
-          setError(new Error(errorMessage));
-          setStatus('error');
+        // Запускаем сканирование
+        await window.CapacitorNFC.startScan()
+        console.log('Сканирование NFC запущено через Capacitor')
+      } 
+      // Для веб-браузеров используем Web NFC API
+      else if ('NDEFReader' in window) {
+        // Создаем экземпляр NFC
+        const ndef = new window.NDEFReader()
+        
+        // Запускаем сканирование
+        await ndef.scan()
+        console.log('Сканирование NFC запущено через Web NFC API')
+        
+        // Обработка событий чтения
+        ndef.addEventListener('reading', (event: any) => {
+          console.log('Обнаружена NFC метка через Web NFC API:', event)
           
-          // Автоматически перезапускаем сканирование при ошибке через 3 секунды
-          setTimeout(() => {
-            startReading();
-          }, 3000);
-        });
-        
-      } catch (scanError) {
-        console.error('Ошибка при запуске NFC сканирования:', scanError);
-        
-        // Специальная обработка разных типов ошибок
-        if (scanError instanceof Error) {
-          // Для NotAllowedError - попробуем дать подсказку пользователю
-          if (scanError.name === 'NotAllowedError') {
-            setError(new Error('Доступ к NFC запрещен. Проверьте настройки устройства и разрешения.'));
-          } 
-          // Для NotSupportedError - уточняем сообщение
-          else if (scanError.name === 'NotSupportedError') {
-            setError(new Error('NFC не поддерживается на этом устройстве или отключен в настройках.'));
-          } 
-          // Для других ошибок
-          else {
-            setError(scanError);
+          // Проходим по записям и находим текстовую
+          if (event.message && event.message.records) {
+            for (const record of event.message.records) {
+              if (record.recordType === 'text') {
+                record.data.text().then((text: string) => {
+                  try {
+                    // Генерируем событие для обработки в приложении
+                    window.dispatchEvent(new CustomEvent('nfc-auth-data', { 
+                      detail: JSON.parse(text) 
+                    }))
+                  } catch (e) {
+                    console.error('Ошибка при разборе данных NFC:', e)
+                  }
+                })
+              }
+            }
           }
-        } else {
-          setError(new Error('Неизвестная ошибка при инициализации NFC'));
-        }
-        
-        setStatus('error');
+        })
+      } else {
+        throw new Error('NFC не поддерживается на этом устройстве')
+      }
+    } catch (e: any) {
+      console.error('Ошибка при запуске NFC чтения:', e)
+      setStatus('error')
+      setError(new Error(e.message || 'Неизвестная ошибка NFC'))
+    }
+  }, [isNative])
+  
+  // Остановка чтения NFC
+  const stopReading = useCallback(async () => {
+    try {
+      // Для нативных приложений
+      if (isNative && window.CapacitorNFC) {
+        await window.CapacitorNFC.stopScan()
+        await window.CapacitorNFC.removeAllListeners()
       }
       
-    } catch (e) {
-      console.error('Ошибка в процессе работы с NFC:', e);
-      setError(e instanceof Error ? e : new Error('Ошибка инициализации NFC'));
-      setStatus('error');
+      setStatus('idle')
+    } catch (e: any) {
+      console.error('Ошибка при остановке NFC чтения:', e)
+      setError(new Error(e.message || 'Ошибка при остановке NFC'))
     }
-  }, [isAvailable])
+  }, [isNative])
   
-  // Запись данных на NFC
-  const startWriting = useCallback(async (message: string) => {
-    if (!isAvailable) {
-      setError(new Error('NFC не поддерживается на этом устройстве'))
-      return
-    }
-    
+  // Запись данных в NFC
+  const startWriting = useCallback(async (data: string) => {
     try {
       setStatus('writing')
       setError(null)
       
-      // @ts-ignore - Web NFC API может не быть в TypeScript определениях
-      const ndef = new window.NDEFReader()
-      
-      // Создаем сообщение для записи
-      const encoder = new TextEncoder()
-      const encodedData = encoder.encode(message)
-      
-      // Записываем сообщение на NFC-метку
-      await ndef.write({
-        records: [
-          {
-            recordType: "text",
-            data: encodedData,
-            lang: "ru"
-          }
-        ]
-      })
+      // Нативная запись через Capacitor
+      if (isNative && window.CapacitorNFC) {
+        await window.CapacitorNFC.write({ text: data })
+        console.log('Данные успешно записаны через Capacitor')
+      } 
+      // Запись через Web NFC API
+      else if ('NDEFReader' in window) {
+        // Создаем экземпляр NFC
+        const ndef = new window.NDEFReader()
+        
+        // Записываем данные
+        await ndef.write({ 
+          records: [{ recordType: "text", data: data }] 
+        })
+        
+        console.log('Данные успешно записаны через Web NFC API')
+      } else {
+        throw new Error('NFC не поддерживается на этом устройстве')
+      }
       
       setStatus('idle')
-    } catch (e) {
-      setError(e instanceof Error ? e : new Error('Ошибка записи на NFC-метку'))
+    } catch (e: any) {
+      console.error('Ошибка при записи в NFC:', e)
       setStatus('error')
+      setError(new Error(e.message || 'Ошибка при записи в NFC'))
     }
-  }, [isAvailable])
+  }, [isNative])
   
   return {
     isAvailable,
     status,
     error,
     startReading,
+    stopReading,
     startWriting,
     stopNFC,
     isSupported: isAvailable,
     isScanning,
     startScan
   }
-} 
+}
+
+export default useNFC; 
