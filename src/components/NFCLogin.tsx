@@ -224,6 +224,62 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
         console.warn('Нет информации об устройстве-источнике')
       }
       
+      // ГАРАНТИРОВАННО ДОБАВЛЯЕМ УСТРОЙСТВО В СПИСОК
+      try {
+        // Получаем текущий список устройств
+        let devices = [];
+        const storedDevices = localStorage.getItem('samga-authorized-devices');
+        
+        if (storedDevices) {
+          try {
+            devices = JSON.parse(storedDevices);
+            console.log('Загружено устройств:', devices.length);
+          } catch (e) {
+            console.error('Ошибка при парсинге списка устройств:', e);
+            devices = [];
+          }
+        }
+        
+        // Добавляем новое устройство в список, если оно еще не существует
+        const exists = devices.some((dev: any) => dev.id === authData.deviceId);
+        
+        if (!exists) {
+          // Создаем информацию об устройстве
+          const deviceInfo = {
+            id: authData.deviceId,
+            name: getBrowserInfo(),
+            browser: navigator.userAgent,
+            lastAccess: new Date().toLocaleString('ru'),
+            timestamp: new Date().getTime(),
+            isNFCAuthorized: true // Важно для отображения
+          };
+          
+          // Проверяем лимит устройств
+          if (devices.length >= 5) {
+            // Если лимит достигнут, удаляем самое старое устройство
+            devices.sort((a: any, b: any) => a.timestamp - b.timestamp);
+            devices.shift(); // Удаляем самое старое
+          }
+          
+          // Добавляем новое устройство
+          devices.push(deviceInfo);
+          
+          // Сохраняем обновленный список
+          localStorage.setItem('samga-authorized-devices', JSON.stringify(devices));
+          console.log('Устройство добавлено в список:', deviceInfo.id);
+          
+          // Сохраняем дополнительную информацию
+          localStorage.setItem('current-device-info', JSON.stringify(deviceInfo));
+        } else {
+          console.log('Устройство уже существует в списке:', authData.deviceId);
+        }
+      } catch (e) {
+        console.error('Ошибка при добавлении устройства в список:', e);
+      }
+      
+      // Устанавливаем флаг для обновления списка устройств
+      localStorage.setItem('force-update-devices', 'true');
+      
       setIsLoading(true)
       
       // Выполняем авторизацию
@@ -235,9 +291,6 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
       setIsLoading(false)
       
       if (result.success) {
-        // Добавляем флаг для обновления списка устройств
-        localStorage.setItem('force-update-devices', 'true')
-        
         toast('Успешная авторизация', 'success')
         setLoginSuccess(true)
         setTimeout(() => {

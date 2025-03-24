@@ -237,6 +237,45 @@ const DeviceAuthorization = () => {
     }
   }, [authorizeDevice, authorizedDevices]);
   
+  // Загружаем список устройств из localStorage
+  useEffect(() => {
+    const loadDevicesFromLocalStorage = () => {
+      console.log('Принудительная загрузка устройств из localStorage');
+      
+      try {
+        // Получаем сохраненные устройства
+        const storedDevices = localStorage.getItem('samga-authorized-devices');
+        if (!storedDevices) {
+          console.log('В localStorage нет устройств');
+          return;
+        }
+        
+        const devices = JSON.parse(storedDevices);
+        if (!Array.isArray(devices)) {
+          console.error('Список устройств в localStorage не является массивом');
+          return;
+        }
+        
+        console.log('Загружено устройств из localStorage:', devices.length);
+        
+        // Вручную обновляем authorizedDevices с помощью хука useDeviceAuth
+        if (devices.length > 0 && authorizedDevices.length === 0) {
+          window.location.reload();
+        }
+      } catch (e) {
+        console.error('Ошибка при загрузке устройств из localStorage:', e);
+      }
+    };
+    
+    // Загружаем устройства при монтировании компонента
+    loadDevicesFromLocalStorage();
+    
+    // Загружаем каждые 5 секунд для синхронизации
+    const interval = setInterval(loadDevicesFromLocalStorage, 5000);
+    
+    return () => clearInterval(interval);
+  }, [authorizedDevices.length]);
+  
   // Начать процесс авторизации (общий метод)
   const handleStartAuth = async () => {
     // Если достигнут лимит устройств

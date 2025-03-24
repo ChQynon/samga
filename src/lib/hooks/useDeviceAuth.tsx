@@ -81,40 +81,87 @@ export const useDeviceAuth = (): DeviceAuthHook => {
   // ID основного устройства
   const [mainDeviceId, setMainDeviceId] = useState<string | null>(null)
   
-  // Загрузка списка устройств при инициализации
+  // Загрузка данных об устройствах
   useEffect(() => {
     try {
-      // Проверяем, является ли это устройство основным
-      const storedMainDeviceId = localStorage.getItem(MAIN_DEVICE_KEY);
-      const isMainDevice = !storedMainDeviceId;
-      
-      // Если это первый запуск и это основное устройство, сгенерируем ID
-      if (isMainDevice) {
-        const deviceId = uuidv4()
-        localStorage.setItem(MAIN_DEVICE_KEY, deviceId)
-        setMainDeviceId(deviceId)
-      } else {
-        // Если это не основное устройство, получаем ID из хранилища
-        setMainDeviceId(storedMainDeviceId)
-      }
-      
-      // Получаем список устройств из localStorage
-      let storedDevices = localStorage.getItem(DEVICES_STORAGE_KEY)
+      // Загружаем список авторизованных устройств
+      const storedDevices = localStorage.getItem(DEVICES_STORAGE_KEY)
       let devices: DeviceInfo[] = []
       
       if (storedDevices) {
         try {
-          devices = JSON.parse(storedDevices) as DeviceInfo[]
-          console.log('Загружено устройств:', devices.length)
-        } catch (parseError) {
-          console.error('Ошибка при парсинге устройств:', parseError)
-          devices = []
+          devices = JSON.parse(storedDevices)
+          console.log('Загружено устройств:', devices.length);
+          
+          // Добавляем флаг isNFCAuthorized для устройств, если он отсутствует
+          devices = devices.map(device => {
+            // Проверяем, имеет ли устройство флаг isNFCAuthorized
+            if ('isNFCAuthorized' in device) {
+              return device; // У устройства уже есть этот флаг
+            }
+            
+            // Проверяем, является ли это текущим устройством
+            const currentId = localStorage.getItem(CURRENT_DEVICE_KEY);
+            const isNfcAuth = localStorage.getItem('device-nfc-authorized') === 'true';
+            
+            // Если это текущее устройство и оно авторизовано через NFC
+            if (currentId === device.id && isNfcAuth) {
+              return {
+                ...device,
+                isNFCAuthorized: true
+              };
+            }
+            
+            return device;
+          });
+          
+          // Сохраняем обновленный список с флагами
+          localStorage.setItem(DEVICES_STORAGE_KEY, JSON.stringify(devices));
+        } catch (e) {
+          console.error('Ошибка при парсинге данных об устройствах:', e)
+        }
+      } else {
+        console.log('Нет сохраненных устройств')
+      }
+      
+      // Проверяем наличие главного устройства
+      const mainDevice = localStorage.getItem(MAIN_DEVICE_KEY)
+      if (mainDevice) {
+        setMainDeviceId(mainDevice)
+      } else {
+        // Если это первое устройство, устанавливаем его как главное
+        if (devices.length === 0) {
+          const newDeviceId = uuidv4()
+          
+          // Создаем первое устройство
+          const deviceInfo: DeviceInfo = {
+            id: newDeviceId,
+            name: getBrowserInfo(),
+            browser: navigator.userAgent,
+            lastAccess: new Date().toLocaleString('ru'),
+            timestamp: new Date().getTime()
+          }
+          
+          // Добавляем устройство в список
+          devices.push(deviceInfo)
+          
+          // Устанавливаем его как главное
+          localStorage.setItem(MAIN_DEVICE_KEY, newDeviceId)
+          setMainDeviceId(newDeviceId)
+          
+          // Сохраняем в localStorage
+          localStorage.setItem(DEVICES_STORAGE_KEY, JSON.stringify(devices))
+        } else if (devices.length > 0 && devices[0]?.id) {
+          // Используем ID первого устройства как главного
+          const firstDeviceId = devices[0].id
+          localStorage.setItem(MAIN_DEVICE_KEY, firstDeviceId)
+          setMainDeviceId(firstDeviceId)
         }
       }
       
-      // Проверка экстренного устройства, добавленного через NFC/QR
-      const emergencyDeviceId = localStorage.getItem('emergency-device-id');
-      const emergencyDeviceInfo = localStorage.getItem('emergency-device-info');
+      // Проверяем наличие экстренного устройства
+      const emergencyDeviceId = localStorage.getItem('emergency-device-id')
+      const emergencyDeviceInfo = localStorage.getItem('emergency-device-info')
       
       if (emergencyDeviceId && emergencyDeviceInfo) {
         try {
