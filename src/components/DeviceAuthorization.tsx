@@ -53,7 +53,8 @@ const DeviceAuthorization = () => {
     authorizeDevice, 
     revokeDevice, 
     prepareAuthData,
-    clearAllDevices
+    clearAllDevices,
+    isCurrentDeviceShared
   } = useDeviceAuth()
   
   const { isAvailable, startWriting, status, error } = useNFC()
@@ -119,17 +120,18 @@ const DeviceAuthorization = () => {
         console.log('Найдено текущее устройство:', device.id);
       }
       
-      // Проверяем флаг isNFCAuthorized или типичные признаки NFC устройства
-      const isNFCAuth = device.isNFCAuthorized || 
-                        (typeof window !== 'undefined' && 
-                         localStorage.getItem('device-nfc-authorized') === 'true' && 
-                         isCurrent);
+      // Проверяем, является ли устройство авторизованным через NFC
+      const isNFCAuthorized = 
+        (typeof window !== 'undefined' && 
+         localStorage.getItem('device-nfc-authorized') === 'true' && 
+         isCurrent) || 
+        ('isNFCAuthorized' in device && Boolean(device.isNFCAuthorized));
       
       return {
         ...device,
         formattedTime: formatTime(device.timestamp),
         isCurrent,
-        isNFCAuthorized: isNFCAuth
+        isNFCAuthorized
       };
     });
     
@@ -143,21 +145,41 @@ const DeviceAuthorization = () => {
   // Состояние для отслеживания устройства, подключенного через NFC/QR
   const [isNfcAuthorized, setIsNfcAuthorized] = useState(false);
   
-  // Принудительная перезагрузка списка устройств из localStorage при монтировании компонента
+  // Проверяем статус текущего устройства при загрузке
   useEffect(() => {
     try {
-      console.log('Принудительная перезагрузка списка устройств');
-      
-      // Проверяем, подключено ли устройство через NFC/QR
       if (typeof window !== 'undefined') {
-        const isNfcAuth = localStorage.getItem('device-nfc-authorized') === 'true';
-        setIsNfcAuthorized(isNfcAuth);
+        // Проверяем статус NFC авторизации
+        const nfcAuth = localStorage.getItem('device-nfc-authorized');
+        setIsNfcAuthorized(nfcAuth === 'true');
         
-        // Проверка на обновление списка устройств
+        // Проверяем, происходит ли обновление списка устройств
         const forceUpdate = localStorage.getItem('force-update-devices');
-        if (forceUpdate) {
-          // Пытаемся принудительно найти текущее устройство
+        
+        if (forceUpdate === 'true') {
+          console.log('Обнаружено принудительное обновление списка устройств');
+          
+          // Получаем ID текущего устройства
           const currentId = localStorage.getItem('samga-current-device-id');
+          console.log('Текущее устройство ID:', currentId);
+          
+          // Принудительно обновляем список устройств из localStorage
+          const storedDevices = localStorage.getItem('samga-authorized-devices');
+          if (storedDevices) {
+            try {
+              // Парсим список устройств
+              const devices = JSON.parse(storedDevices);
+              console.log('Принудительно обновляем список устройств, найдено:', devices.length);
+              
+              // Отображение устройств без повторной загрузки, если есть хотя бы одно
+              if (devices.length > 0) {
+                // Устанавливаем устройства через колбэк, чтобы избежать проблем с асинхронностью
+                setTimeout(() => window.location.reload(), 100);
+              }
+            } catch (e) {
+              console.error('Ошибка при парсинге списка устройств:', e);
+            }
+          }
           
           if (currentId) {
             // Перезагружаем список устройств
@@ -186,32 +208,28 @@ const DeviceAuthorization = () => {
         }
       }
       
+      // Проверяем, можно ли вообще авторизовать новые устройства
+      if (!authorizeDevice) {
+        setIsNfcAuthorized(true); // Если нельзя авторизовать, значит устройство уже связанное
+      }
+      
+      // Проверяем, есть ли устройства в localStorage, которых нет в состоянии
       const storedDevices = localStorage.getItem('samga-authorized-devices');
-      if (storedDevices) {
+      if (storedDevices && authorizedDevices.length === 0) {
         try {
           const devices = JSON.parse(storedDevices);
-          console.log('Загружено устройств напрямую из localStorage:', devices.length);
-          
-          // Проверяем, что это массив
-          if (Array.isArray(devices) && devices.length > 0) {
-            console.log('Устройства найдены в localStorage:', devices.length);
-            // Отладочная информация о первом устройстве
-            if (devices[0]) {
-              console.log('Пример устройства:', devices[0].id, devices[0].name);
-            }
-          } else {
-            console.warn('В localStorage нет устройств или данные повреждены');
+          if (devices.length > 0) {
+            console.log('Обнаружены устройства в localStorage, но не в состоянии. Перезагрузка...');
+            window.location.reload();
           }
         } catch (e) {
-          console.error('Ошибка при парсинге устройств из localStorage:', e);
+          console.error('Ошибка при проверке устройств в localStorage:', e);
         }
-      } else {
-        console.log('В localStorage нет сохраненных устройств');
       }
     } catch (e) {
-      console.error('Ошибка при прямом чтении из localStorage:', e);
+      console.error('Ошибка при проверке статуса устройства:', e);
     }
-  }, []);
+  }, [authorizeDevice, authorizedDevices]);
   
   // Начать процесс авторизации (общий метод)
   const handleStartAuth = async () => {
@@ -222,7 +240,7 @@ const DeviceAuthorization = () => {
     }
     
     // Если текущее устройство авторизовано через другое устройство, запрещаем авторизацию
-    if (!authorizeDevice) {
+    if (!authorizeDevice || isCurrentDeviceShared) {
       showToast('Нельзя авторизовать другие устройства с устройства, которое само было авторизовано', 'error')
       return
     }
@@ -364,18 +382,24 @@ const DeviceAuthorization = () => {
         </p>
       </div>
       
-      {/* Предупреждение для устройств, авторизованных через другие устройства */}
-      {!authorizeDevice && (
-        <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
-          <p className="font-medium">Ограниченный доступ</p>
+      {/* Уведомление для связанных устройств */}
+      {isCurrentDeviceShared && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 mt-2 mb-3">
+          <div className="flex items-center space-x-2">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 16V12M12 8H12.01M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" 
+                stroke="#1E40AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <p className="font-medium">Связанное устройство</p>
+          </div>
           <p className="mt-1">
-            Это устройство было авторизовано через другое устройство. 
-            Вы не можете использовать его для авторизации новых устройств.
+            Это устройство было подключено через другое устройство и имеет ограниченный доступ.
+            С этого устройства нельзя авторизовать другие устройства.
           </p>
         </div>
       )}
       
-      {/* Дополнительное предупреждение для устройств, авторизованных через NFC/QR */}
+      {/* Сообщение об авторизации через NFC/QR */}
       {isNfcAuthorized && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 mt-2">
           <p className="font-medium">Подключено через NFC/QR</p>
