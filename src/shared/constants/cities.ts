@@ -13,7 +13,7 @@ const CITIES: Record<string, string> = {
   Kokshetau: 'kt',
   Karaganda: 'krg',
   Atyrau: 'atr',
-  Aktobe: 'akt',
+  Aktobe: 'aktb',
   Aktau: 'akt',
   Astana_FMSH: 'ast',
   Almaty_HBSH: 'hbalm',

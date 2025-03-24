@@ -51,6 +51,7 @@ http.interceptors.response.use(
 
           return http(originalConfig)
         } catch (error) {
+          isRefreshing = false
           throw new Error('UNAUTHORIZED')
         }
       } else {

@@ -36,6 +36,7 @@ interface SourceDevice {
 interface FormattedDevice extends DeviceInfo {
   formattedTime?: string;
   isCurrent?: boolean;
+  isNFCAuthorized?: boolean;
 }
 
 const DeviceAuthorization = () => {
@@ -51,7 +52,8 @@ const DeviceAuthorization = () => {
     remainingSlots,
     authorizeDevice, 
     revokeDevice, 
-    prepareAuthData 
+    prepareAuthData,
+    clearAllDevices
   } = useDeviceAuth()
   
   const { isAvailable, startWriting, status, error } = useNFC()
@@ -92,6 +94,19 @@ const DeviceAuthorization = () => {
       }
     }
     
+    // Проверка на emergency-device-id
+    if (!currentDeviceId && typeof window !== 'undefined') {
+      try {
+        const emergencyId = localStorage.getItem('emergency-device-id');
+        if (emergencyId) {
+          console.log('Найден аварийный ID устройства:', emergencyId);
+          currentDeviceId = emergencyId;
+        }
+      } catch (e) {
+        console.error('Ошибка при проверке аварийного ID:', e);
+      }
+    }
+    
     // Логируем все устройства для отладки
     devices.forEach((device, index) => {
       console.log(`Устройство ${index+1}:`, device.id, device.name);
@@ -104,10 +119,17 @@ const DeviceAuthorization = () => {
         console.log('Найдено текущее устройство:', device.id);
       }
       
+      // Проверяем флаг isNFCAuthorized или типичные признаки NFC устройства
+      const isNFCAuth = device.isNFCAuthorized || 
+                        (typeof window !== 'undefined' && 
+                         localStorage.getItem('device-nfc-authorized') === 'true' && 
+                         isCurrent);
+      
       return {
         ...device,
         formattedTime: formatTime(device.timestamp),
-        isCurrent // Добавляем признак текущего устройства
+        isCurrent,
+        isNFCAuthorized: isNFCAuth
       };
     });
     
@@ -118,10 +140,52 @@ const DeviceAuthorization = () => {
   // Получаем форматированный список устройств
   const formattedDevices = formatDeviceList(authorizedDevices);
   
+  // Состояние для отслеживания устройства, подключенного через NFC/QR
+  const [isNfcAuthorized, setIsNfcAuthorized] = useState(false);
+  
   // Принудительная перезагрузка списка устройств из localStorage при монтировании компонента
   useEffect(() => {
     try {
       console.log('Принудительная перезагрузка списка устройств');
+      
+      // Проверяем, подключено ли устройство через NFC/QR
+      if (typeof window !== 'undefined') {
+        const isNfcAuth = localStorage.getItem('device-nfc-authorized') === 'true';
+        setIsNfcAuthorized(isNfcAuth);
+        
+        // Проверка на обновление списка устройств
+        const forceUpdate = localStorage.getItem('force-update-devices');
+        if (forceUpdate) {
+          // Пытаемся принудительно найти текущее устройство
+          const currentId = localStorage.getItem('samga-current-device-id');
+          
+          if (currentId) {
+            // Перезагружаем список устройств
+            const storedDevices = localStorage.getItem('samga-authorized-devices');
+            if (storedDevices) {
+              try {
+                const devices = JSON.parse(storedDevices);
+                console.log('Проверка на наличие текущего устройства в списке');
+                
+                // Проверяем, есть ли текущее устройство в списке
+                const hasCurrentDevice = devices.some((dev: any) => dev.id === currentId);
+                
+                if (!hasCurrentDevice) {
+                  // Если устройства нет в списке, принудительно обновляем страницу
+                  console.log('Устройство не найдено в списке, обновляем страницу');
+                  setTimeout(() => window.location.reload(), 500);
+                }
+              } catch (e) {
+                console.error('Ошибка при проверке списка устройств:', e);
+              }
+            }
+          }
+          
+          // Удаляем флаг обновления
+          localStorage.removeItem('force-update-devices');
+        }
+      }
+      
       const storedDevices = localStorage.getItem('samga-authorized-devices');
       if (storedDevices) {
         try {
@@ -179,28 +243,40 @@ const DeviceAuthorization = () => {
         
         showToast('Данные готовы к передаче', 'success')
         
-        // Имитация успешного подключения для демонстрации анимации
-        if (authData !== 'error' && process.env.NODE_ENV === 'development') {
-          setTimeout(() => {
-            // Создаем имитацию успешно подключенного устройства
-            const dummyDevice: DeviceInfo = {
-              id: 'test-device-id',
-              name: 'iPhone на iOS (Демо)',
-              browser: 'Safari',
-              lastAccess: new Date().toLocaleString('ru'),
-              timestamp: new Date().getTime()
-            }
-            setLastConnectedDevice(dummyDevice)
-            
-            // Имитация информации об источнике
-            setSourceDevice({
-              name: 'Chrome на Windows (Текущее устройство)',
-              id: 'main-device'
-            })
-            
-            setShowSuccess(true)
-          }, 5000) // Показываем через 5 секунд для демонстрации
-        }
+        // ОТКЛЮЧАЕМ автоматическое демо-подключение на production
+        // в режиме разработки, демо подключение происходит только при нажатии кнопки
+        // if (authData !== 'error' && process.env.NODE_ENV === 'development') {
+        //   setTimeout(() => {
+        //     // Создаем имитацию успешно подключенного устройства
+        //     const dummyDevice: DeviceInfo = {
+        //       id: 'test-device-id-' + Date.now(),
+        //       name: 'iPhone на iOS (Демо)',
+        //       browser: 'Safari',
+        //       lastAccess: new Date().toLocaleString('ru'),
+        //       timestamp: new Date().getTime(),
+        //       isNFCAuthorized: true
+        //     }
+        //     setLastConnectedDevice(dummyDevice)
+        //     
+        //     // Имитация информации об источнике
+        //     setSourceDevice({
+        //       name: 'Chrome на Windows (Текущее устройство)',
+        //       id: 'main-device'
+        //     })
+        //     
+        //     // Добавляем реальное устройство в список
+        //     const updatedDevices = [...authorizedDevices, dummyDevice];
+        //     localStorage.setItem('samga-authorized-devices', JSON.stringify(updatedDevices));
+        //     // Показать анимацию зеленого свечения
+        //     document.body.classList.add('connection-success-glow');
+        //     setTimeout(() => {
+        //       document.body.classList.remove('connection-success-glow');
+        //     }, 2000);
+        //     
+        //     setShowSuccess(true)
+        //     window.location.reload(); // Перезагружаем страницу для обновления списка
+        //   }, 3000) // Показываем через 3 секунды для демонстрации
+        // }
       } else if (authData === 'limit_exceeded') {
         showToast(`Достигнут лимит в 5 устройств. Отзовите доступ у неиспользуемых устройств.`, 'error')
         setShowQrDialog(false)
@@ -216,13 +292,26 @@ const DeviceAuthorization = () => {
     }
   }
   
+  // Храним текущее количество устройств для определения, когда добавилось новое
+  const [prevDevicesLength, setPrevDevicesLength] = useState(0);
+  
   // Получаем последнее добавленное устройство при обновлении списка устройств
   useEffect(() => {
-    if (authorizedDevices.length > 0 && showQrDialog) {
+    // Проверяем, что добавилось новое устройство, а не отображается старое
+    if (authorizedDevices.length > prevDevicesLength && showQrDialog) {
       const lastDevice = authorizedDevices[authorizedDevices.length - 1]
       if (lastDevice) {
+        // Обновляем счетчик устройств
+        setPrevDevicesLength(authorizedDevices.length);
+        
         setLastConnectedDevice(lastDevice)
         setShowSuccess(true)
+        
+        // Показать анимацию зеленого свечения
+        document.body.classList.add('connection-success-glow');
+        setTimeout(() => {
+          document.body.classList.remove('connection-success-glow');
+        }, 2000);
         
         // Попытка извлечь информацию об устройстве-источнике из localStorage
         try {
@@ -239,6 +328,9 @@ const DeviceAuthorization = () => {
           console.error('Ошибка при получении информации об устройстве-источнике:', error)
         }
       }
+    } else {
+      // Обновляем счетчик устройств без показа диалога
+      setPrevDevicesLength(authorizedDevices.length);
     }
   }, [authorizedDevices, showQrDialog])
   
@@ -283,6 +375,17 @@ const DeviceAuthorization = () => {
         </div>
       )}
       
+      {/* Дополнительное предупреждение для устройств, авторизованных через NFC/QR */}
+      {isNfcAuthorized && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 mt-2">
+          <p className="font-medium">Подключено через NFC/QR</p>
+          <p className="mt-1">
+            Это устройство было подключено через NFC или QR-код.
+            Оно имеет ограниченный доступ и не может авторизовать другие устройства.
+          </p>
+        </div>
+      )}
+      
       {/* Информация о лимите устройств */}
       <div className="rounded-lg border p-4 flex justify-between items-center">
         <div>
@@ -291,13 +394,32 @@ const DeviceAuthorization = () => {
             {authorizedDevices.length} из 5 устройств используются
           </p>
         </div>
-        <div className="flex items-center gap-1">
-          {Array(5).fill(0).map((_, index) => (
-            <div 
-              key={index} 
-              className={`w-2 h-5 rounded-sm ${index < authorizedDevices.length ? 'bg-primary' : 'bg-muted'}`}
-            ></div>
-          ))}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1">
+            {Array(5).fill(0).map((_, index) => (
+              <div 
+                key={index} 
+                className={`w-2 h-5 rounded-sm ${index < authorizedDevices.length ? 'bg-primary' : 'bg-muted'}`}
+              ></div>
+            ))}
+          </div>
+          {process.env.NODE_ENV === 'development' && (
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-7 w-7 text-muted-foreground/70 hover:text-destructive"
+              onClick={() => {
+                if (clearAllDevices) {
+                  clearAllDevices();
+                  showToast('Все устройства удалены', 'success');
+                  setTimeout(() => window.location.reload(), 500);
+                }
+              }}
+              title="Сбросить все устройства (для отладки)"
+            >
+              <Trash size={16} />
+            </Button>
+          )}
         </div>
       </div>
       
@@ -328,20 +450,25 @@ const DeviceAuthorization = () => {
                       ? "Текущее устройство" 
                       : `Подключено: ${device.formattedTime || device.lastAccess || 'неизвестно'}`
                     }
+                    {device.isNFCAuthorized && <span className="ml-1 text-blue-500">(через NFC/QR)</span>}
                   </p>
+                  {device.isNFCAuthorized && device.isCurrent && (
+                    <p className="text-xs text-yellow-600 mt-1">
+                      Связанное устройство с ограниченным доступом
+                    </p>
+                  )}
                 </div>
               </div>
               
-              {!device.isCurrent && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                  onClick={() => handleRequestRevoke(device.id)}
-                >
-                  <X size={16} />
-                </Button>
-              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                onClick={() => handleRequestRevoke(device.id)}
+                disabled={device.isCurrent}
+              >
+                <X size={16} />
+              </Button>
             </div>
           ))
         ) : (
@@ -464,8 +591,10 @@ const DeviceAuthorization = () => {
           ) : (
             <div className="py-8 flex flex-col items-center">
               <div className="mb-6 flex flex-col items-center">
-                <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mb-4">
-                  <CheckCircle size={40} className="text-green-600" weight="fill" />
+                <div className="animate-pulse w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mb-4">
+                  <div className="animate-scale-in">
+                    <CheckCircle size={40} className="text-green-600" weight="fill" />
+                  </div>
                 </div>
                 <h3 className="text-lg font-medium text-green-700">
                   Подключено успешно!
@@ -473,23 +602,31 @@ const DeviceAuthorization = () => {
               </div>
               
               {lastConnectedDevice && (
-                <div className="w-full bg-slate-50 rounded-lg p-4 mb-4">
-                  <div className="flex items-center gap-2 mb-2">
+                <div className="w-full bg-slate-50 rounded-lg p-4 mb-4 animate-slide-in relative success-card">
+                  <div className="success-pulse absolute inset-0 rounded-lg"></div>
+                  <div className="flex items-center gap-2 mb-2 relative z-10">
                     <Smartphone className="h-5 w-5 text-primary" />
                     <p className="font-medium">{lastConnectedDevice.name}</p>
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground relative z-10">
                     Устройство получило доступ {lastConnectedDevice.lastAccess}
                   </p>
                   
                   {sourceDevice && (
-                    <div className="mt-2 pt-2 border-t border-slate-200">
+                    <div className="mt-2 pt-2 border-t border-slate-200 relative z-10">
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <span>Авторизовано через:</span>
                         <span className="font-medium">{sourceDevice.name}</span>
                       </p>
                     </div>
                   )}
+                  
+                  <div className="mt-3 pt-2 border-t border-slate-200 relative z-10">
+                    <p className="text-xs text-yellow-600">
+                      <span className="font-medium">Важно:</span> Это устройство имеет ограниченный доступ
+                      и не сможет авторизовать другие устройства.
+                    </p>
+                  </div>
                 </div>
               )}
               
@@ -535,6 +672,68 @@ const DeviceAuthorization = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      <style jsx global>{`
+        @keyframes qrScanAnimation {
+          0% { transform: translateY(-150px); }
+          50% { transform: translateY(150px); }
+          100% { transform: translateY(-150px); }
+        }
+        
+        @keyframes slideIn {
+          from { transform: translateY(20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        
+        @keyframes scaleIn {
+          from { transform: scale(0); opacity: 0; }
+          to { transform: scale(1); opacity: 1; }
+        }
+        
+        .animate-slide-in {
+          animation: slideIn 0.4s ease-out forwards;
+        }
+        
+        .animate-scale-in {
+          animation: scaleIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        
+        /* Анимация зеленого свечения при успешном подключении */
+        @keyframes connectionSuccessGlow {
+          0% { box-shadow: inset 0 0 0 0 rgba(34, 197, 94, 0); }
+          40% { box-shadow: inset 0 0 20px 10px rgba(34, 197, 94, 0.3); }
+          100% { box-shadow: inset 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
+        
+        .connection-success-glow {
+          animation: connectionSuccessGlow 2s ease-out forwards;
+        }
+        
+        /* Пульсирующий эффект в карточке устройства */
+        @keyframes successPulse {
+          0% { 
+            background-color: rgba(34, 197, 94, 0.05);
+            box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.1);
+          }
+          50% { 
+            background-color: rgba(34, 197, 94, 0.1);
+            box-shadow: 0 0 10px 5px rgba(34, 197, 94, 0.2);
+          }
+          100% { 
+            background-color: rgba(34, 197, 94, 0.05);
+            box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.1);
+          }
+        }
+        
+        .success-pulse {
+          animation: successPulse 2s ease-in-out infinite;
+        }
+        
+        .success-card {
+          overflow: hidden;
+          border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+      `}</style>
     </div>
   )
 }

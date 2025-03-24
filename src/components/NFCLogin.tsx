@@ -87,6 +87,7 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
   const { showToast: toast } = useToast()
   const [qrValue, setQrValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [loginSuccess, setLoginSuccess] = useState(false)
 
   useEffect(() => {
     const handleAuthData = (event: Event) => {
@@ -216,7 +217,10 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
 
       if (result.success) {
         toast('Успешная авторизация', 'success')
-        window.location.href = '/dashboard'
+        setLoginSuccess(true)
+        setTimeout(() => {
+          window.location.href = '/dashboard'
+        }, 2000)
       } else {
         toast('Ошибка авторизации', 'error')
       }
@@ -434,6 +438,37 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
         <br />
         {!isAvailable && "NFC не поддерживается на этом устройстве, но можно использовать QR-код."}
       </p>
+
+      {loginSuccess && (
+        <div className="flex flex-col items-center">
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-2">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M5 12L10 17L20 7" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <p className="mt-2 text-center text-sm font-medium text-green-600">
+            Вход выполнен успешно!
+          </p>
+          <p className="text-center text-xs text-muted-foreground mb-4">
+            Перенаправление...
+          </p>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => window.location.href = '/'}
+            >
+              Перейти на главную
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => window.location.href = '/#settings/devices'}
+            >
+              Настройки устройств
+            </Button>
+          </div>
+        </div>
+      )}
     </>
   )
 }

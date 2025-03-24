@@ -11,11 +11,11 @@ export type Session = {
 export const resolveSession = async (
   token?: string,
 ): Promise<Session | null> => {
-  if (!token || token.split('::').length !== 2) {
+  if (!token || token.split('::').length !== 3) {
     return null
   }
 
-  const [compressed, city] = token.split('::')
+  const [compressed, refreshToken, city] = token.split('::')
 
   try {
     const decompressed = await decompress(compressed!)
@@ -28,6 +28,7 @@ export const resolveSession = async (
 
     return {
       accessToken: decompressed,
+      refreshToken: refreshToken,
       city: city as CityAbbr,
     }
   } catch (e) {

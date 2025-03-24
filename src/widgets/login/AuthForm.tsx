@@ -70,6 +70,7 @@ type AuthFormType = z.infer<typeof schema>
 
 const AuthForm = () => {
   const [showPassword, setShowPassword] = useState(false);
+  const [showSuccessEffect, setShowSuccessEffect] = useState(false);
   const form = useForm<AuthFormType>({
     resolver: zodResolver(schema),
   })
@@ -88,8 +89,16 @@ const AuthForm = () => {
           console.error('Ошибка при сохранении данных авторизации:', e)
         }
         
+        // Показываем анимацию успешной авторизации
+        setShowSuccessEffect(true);
+        
         showToast('Вход выполнен успешно', 'success')
-        router.push('/')
+        
+        // Убираем эффект через 1.5 секунды и выполняем переход
+        setTimeout(() => {
+          setShowSuccessEffect(false);
+          router.push('/')
+        }, 1500);
       } else {
         if (res.errors?.iin) form.setError('iin', { message: res.errors?.iin })
         if (res.errors?.password)
@@ -105,64 +114,98 @@ const AuthForm = () => {
   };
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="w-full">
-        <FormField
-          control={form.control}
-          name="iin"
-          render={({ field }) => (
-            <FormItem className="mb-1 mt-1">
-              <FormControl>
-                <Input placeholder="ИИН" autoComplete="username" {...field} />
-              </FormControl>
-              <FormMessage className="pb-1 leading-none text-red-600" />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="password"
-          render={({ field }) => (
-            <FormItem className="mb-1 mt-1">
-              <FormControl>
-                <div className="relative">
-                  <Input
-                    placeholder="Пароль"
-                    autoComplete="current-password"
-                    type={showPassword ? "text" : "password"}
-                    {...field}
-                  />
-                  <button 
-                    type="button"
-                    onClick={toggleShowPassword}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                  >
-                    {showPassword ? (
-                      <EyeSlash className="h-5 w-5" />
-                    ) : (
-                      <Eye className="h-5 w-5" />
-                    )}
-                  </button>
-                </div>
-              </FormControl>
-              <FormMessage className="pb-1 leading-none text-red-600" />
-            </FormItem>
-          )}
-        />
-        <Button
-          type="submit"
-          className="mt-2 w-full"
-          disabled={form.formState.isSubmitting}
-        >
-          Продолжить
-          {form.formState.isSubmitting ? (
-            <Spinner className="ml-1 animate-spin-slow" />
-          ) : (
-            <ArrowRight className="ml-1" />
-          )}
-        </Button>
-      </form>
-    </Form>
+    <>
+      {/* Эффект зеленого свечения при успешной авторизации */}
+      {showSuccessEffect && (
+        <div className="success-glow-effect"></div>
+      )}
+      
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="w-full">
+          <FormField
+            control={form.control}
+            name="iin"
+            render={({ field }) => (
+              <FormItem className="mb-1 mt-1">
+                <FormControl>
+                  <Input placeholder="ИИН" autoComplete="username" {...field} />
+                </FormControl>
+                <FormMessage className="pb-1 leading-none text-red-600" />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem className="mb-1 mt-1">
+                <FormControl>
+                  <div className="relative">
+                    <Input
+                      placeholder="Пароль"
+                      autoComplete="current-password"
+                      type={showPassword ? "text" : "password"}
+                      {...field}
+                    />
+                    <button 
+                      type="button"
+                      onClick={toggleShowPassword}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    >
+                      {showPassword ? (
+                        <EyeSlash className="h-5 w-5" />
+                      ) : (
+                        <Eye className="h-5 w-5" />
+                      )}
+                    </button>
+                  </div>
+                </FormControl>
+                <FormMessage className="pb-1 leading-none text-red-600" />
+              </FormItem>
+            )}
+          />
+          <Button
+            type="submit"
+            className="mt-2 w-full"
+            disabled={form.formState.isSubmitting}
+          >
+            Продолжить
+            {form.formState.isSubmitting ? (
+              <Spinner className="ml-1 animate-spin-slow" />
+            ) : (
+              <ArrowRight className="ml-1" />
+            )}
+          </Button>
+        </form>
+      </Form>
+      
+      <style jsx global>{`
+        @keyframes glowEffect {
+          0% {
+            box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+          }
+          50% {
+            box-shadow: 0 0 0 20px rgba(34, 197, 94, 0.3);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+          }
+        }
+        
+        .success-glow-effect {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 100;
+          pointer-events: none;
+          border: 8px solid rgba(34, 197, 94, 0.4);
+          border-radius: 10px;
+          animation: glowEffect 1.5s ease-out forwards;
+        }
+      `}</style>
+    </>
   )
 }
 

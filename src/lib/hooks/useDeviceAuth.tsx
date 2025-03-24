@@ -20,6 +20,8 @@ export interface DeviceAuthHook {
   canAuthorizeOthers: boolean
   // Сколько осталось мест для подключения устройств
   remainingSlots: number
+  // Функция очистки всех устройств (для отладки)
+  clearAllDevices: () => boolean
 }
 
 // Ключ для localStorage
@@ -97,32 +99,115 @@ export const useDeviceAuth = (): DeviceAuthHook => {
       }
       
       // Получаем список устройств из localStorage
-      const storedDevices = localStorage.getItem(DEVICES_STORAGE_KEY)
+      let storedDevices = localStorage.getItem(DEVICES_STORAGE_KEY)
+      let devices: DeviceInfo[] = []
+      
       if (storedDevices) {
-        const devices = JSON.parse(storedDevices) as DeviceInfo[]
-        // Фильтруем устаревшие устройства
-        const currentTime = new Date().getTime();
-        const validDevices = devices.filter(device => 
-          (currentTime - device.timestamp) < MAX_DEVICE_LIFETIME
-        );
-        
-        // Если мы удалили какие-то устройства, сохраняем обновленный список
-        if (validDevices.length !== devices.length) {
-          localStorage.setItem(DEVICES_STORAGE_KEY, JSON.stringify(validDevices));
+        try {
+          devices = JSON.parse(storedDevices) as DeviceInfo[]
+          console.log('Загружено устройств:', devices.length)
+        } catch (parseError) {
+          console.error('Ошибка при парсинге устройств:', parseError)
+          devices = []
         }
-        
-        // Устанавливаем список устройств и обновляем оставшееся количество слотов
-        setAuthorizedDevices(validDevices)
-        setRemainingSlots(MAX_DEVICES - validDevices.length)
+      }
+      
+      // Проверка экстренного устройства, добавленного через NFC/QR
+      const emergencyDeviceId = localStorage.getItem('emergency-device-id');
+      const emergencyDeviceInfo = localStorage.getItem('emergency-device-info');
+      
+      if (emergencyDeviceId && emergencyDeviceInfo) {
+        try {
+          console.log('Найдено экстренное устройство:', emergencyDeviceId);
+          const deviceInfo = JSON.parse(emergencyDeviceInfo);
+          
+          // Проверяем, есть ли уже такое устройство в списке
+          const exists = devices.some(d => d.id === emergencyDeviceId);
+          
+          if (!exists) {
+            // Добавляем устройство в список
+            devices.push({
+              id: emergencyDeviceId,
+              name: deviceInfo.name || getBrowserInfo(),
+              browser: deviceInfo.browser || navigator.userAgent,
+              lastAccess: deviceInfo.lastAccess || new Date().toLocaleString('ru'),
+              timestamp: deviceInfo.timestamp || Date.now()
+            });
+            
+            // Сохраняем обновленный список
+            localStorage.setItem(DEVICES_STORAGE_KEY, JSON.stringify(devices));
+            console.log('Экстренное устройство добавлено в список');
+          }
+        } catch (e) {
+          console.error('Ошибка при обработке экстренного устройства:', e);
+        }
       }
       
       // Проверяем, является ли текущее устройство "шаренным"
       const currentDeviceId = localStorage.getItem(CURRENT_DEVICE_KEY)
+      let currentDeviceFound = false
+      
       if (currentDeviceId) {
         setIsCurrentDeviceShared(true)
+        
+        // Проверяем, есть ли это устройство в списке авторизованных
+        currentDeviceFound = devices.some(device => device.id === currentDeviceId)
+        
+        // Если устройство не найдено в списке, но ID есть в localStorage - добавляем
+        if (!currentDeviceFound) {
+          console.log('Текущее устройство не найдено в списке, добавляем:', currentDeviceId)
+          
+          // Пытаемся получить дополнительную информацию из дополнительного хранилища
+          let extraInfo: any = {};
+          try {
+            const savedInfo = localStorage.getItem('current-device-info');
+            if (savedInfo) {
+              extraInfo = JSON.parse(savedInfo);
+            }
+          } catch (e) {
+            console.error('Ошибка при чтении дополнительной информации:', e);
+          }
+          
+          // Добавляем текущее устройство в список
+          const deviceInfo: DeviceInfo = {
+            id: currentDeviceId,
+            name: extraInfo?.name || getBrowserInfo(),
+            browser: extraInfo?.browser || navigator.userAgent,
+            lastAccess: extraInfo?.lastAccess || new Date().toLocaleString('ru'),
+            timestamp: extraInfo?.timestamp || Date.now()
+          }
+          
+          // Добавляем в список устройств
+          devices.push(deviceInfo)
+          localStorage.setItem(DEVICES_STORAGE_KEY, JSON.stringify(devices))
+        }
+        
         // Шаренные устройства не могут авторизовать другие устройства
         setCanAuthorizeOthers(false)
       }
+      
+      // Проверка флага NFC-авторизации
+      const isNfcAuth = localStorage.getItem('device-nfc-authorized') === 'true';
+      if (isNfcAuth) {
+        console.log('Устройство авторизовано через NFC/QR, ограничиваем доступ');
+        setCanAuthorizeOthers(false);
+      }
+      
+      // Фильтруем устаревшие устройства
+      const currentTime = new Date().getTime();
+      const validDevices = devices.filter(device => 
+        (currentTime - device.timestamp) < MAX_DEVICE_LIFETIME
+      );
+      
+      // Если мы удалили какие-то устройства, сохраняем обновленный список
+      if (validDevices.length !== devices.length) {
+        localStorage.setItem(DEVICES_STORAGE_KEY, JSON.stringify(validDevices));
+      }
+      
+      // Устанавливаем список устройств и обновляем оставшееся количество слотов
+      setAuthorizedDevices(validDevices)
+      setRemainingSlots(MAX_DEVICES - validDevices.length)
+      
     } catch (e) {
       console.error('Ошибка при загрузке данных об устройствах:', e)
     }
@@ -138,6 +223,31 @@ export const useDeviceAuth = (): DeviceAuthHook => {
     }
   }, [])
   
+  // Очистка всех устройств (для отладки)
+  const clearAllDevices = useCallback(() => {
+    try {
+      localStorage.removeItem(DEVICES_STORAGE_KEY)
+      localStorage.removeItem(CURRENT_DEVICE_KEY)
+      localStorage.removeItem(MAIN_DEVICE_KEY)
+      localStorage.removeItem('device-nfc-authorized')
+      localStorage.removeItem('emergency-device-id')
+      localStorage.removeItem('emergency-device-info')
+      localStorage.removeItem('current-device-info')
+      localStorage.removeItem('force-update-devices')
+      localStorage.removeItem('last-auth-source')
+      
+      setAuthorizedDevices([])
+      setRemainingSlots(MAX_DEVICES)
+      setIsCurrentDeviceShared(false)
+      setCanAuthorizeOthers(true)
+      
+      return true
+    } catch (e) {
+      console.error('Ошибка при очистке устройств:', e)
+      return false
+    }
+  }, [])
+  
   // Авторизация нового устройства
   const authorizeDevice = useCallback((iin: string, password: string): DeviceInfo | null => {
     // Проверяем, не превышен ли лимит устройств
@@ -149,7 +259,7 @@ export const useDeviceAuth = (): DeviceAuthHook => {
     const now = new Date()
     const deviceId = uuidv4()
     
-    // Создаем информацию об устройстве
+    // Создаем информацию об устройстве - ИСПРАВЛЕНО без isNFCAuthorized
     const deviceInfo: DeviceInfo = {
       id: deviceId,
       name: getBrowserInfo(),
@@ -320,7 +430,8 @@ export const useDeviceAuth = (): DeviceAuthHook => {
     prepareAuthData,
     isCurrentDeviceShared,
     canAuthorizeOthers,
-    remainingSlots
+    remainingSlots,
+    clearAllDevices
   }
 }
 

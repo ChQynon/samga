@@ -180,7 +180,7 @@ const NFCLogin = () => {
       // Сигнал пользователю о считывании
       const beep = new Audio("data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU").play().catch(e => {});
       
-      // ГАРАНТИРОВАННОЕ РАСПОЗНАВАНИЕ В РЕЖИМЕ РАЗРАБОТКИ
+      // ГАРАНТИРОВАННЫЙ РАСПОЗНАВАНИЕ В РЕЖИМЕ РАЗРАБОТКИ
       if (isDevelopment) {
         console.log('Демо-режим: используем тестовые данные');
         showToast('QR-код успешно распознан', 'success');
@@ -433,7 +433,7 @@ const NFCLogin = () => {
         browser: navigator.userAgent,
         lastAccess: new Date().toLocaleString('ru'),
         timestamp: Date.now(),
-        isCurrent: isCurrentDevice
+        isNFCAuthorized: true // Устройство авторизовано через NFC/QR
       };
       
       console.log('Подготовлена информация для сохранения:', deviceInfo);
@@ -461,45 +461,54 @@ const NFCLogin = () => {
         devices.push(deviceInfo);
       }
       
-      // СОХРАНЯЕМ ОБЯЗАТЕЛЬНО ВСЕ УСТРОЙСТВА
+      // ГАРАНТИРОВАННОЕ СОХРАНЕНИЕ
       try {
+        // 1. Сначала сохраняем в localStorage устройства
         const dataToSave = JSON.stringify(devices);
         localStorage.setItem('samga-authorized-devices', dataToSave);
         console.log('Сохранен список устройств в localStorage:', devices.length, 'устройств');
-        console.log('Размер данных:', dataToSave.length, 'байт');
-      } catch (saveError) {
-        console.error('Ошибка при сохранении списка устройств:', saveError);
-      }
-      
-      // Если это текущее устройство, отдельно сохраняем его ID
-      if (isCurrentDevice) {
-        localStorage.setItem('samga-current-device-id', deviceId);
-        console.log('Устройство отмечено как текущее:', deviceId);
         
-        // Дублируем информацию в другой ключ для безопасности
-        try {
-          localStorage.setItem('samga-current-device', JSON.stringify(deviceInfo));
-          console.log('Дополнительное сохранение информации о текущем устройстве');
-        } catch (err) {
-          console.error('Ошибка при дополнительном сохранении:', err);
+        // 2. Устанавливаем текущее устройство
+        if (isCurrentDevice) {
+          localStorage.setItem('samga-current-device-id', deviceId);
+          
+          // 3. Дополнительно сохраняем, что устройство подключено через NFC/QR
+          localStorage.setItem('device-nfc-authorized', 'true');
+          
+          // 4. Сохраняем полную информацию об устройстве
+          localStorage.setItem('current-device-info', JSON.stringify(deviceInfo));
+          
+          // 5. Добавляем флаг для принудительного обновления списка
+          localStorage.setItem('force-update-devices', Date.now().toString());
+          
+          console.log('Устройство отмечено как текущее:', deviceId);
+        }
+        
+        // Проверка сохранения через 100мс
+        setTimeout(() => {
+          const test = localStorage.getItem('samga-authorized-devices');
+          if (test) {
+            console.log('Проверка: устройства сохранены успешно');
+          } else {
+            console.error('ОШИБКА: Устройства не сохранились!');
+            // Повторная попытка
+            localStorage.setItem('samga-authorized-devices', dataToSave);
+          }
+        }, 100);
+        
+      } catch (saveError) {
+        console.error('Ошибка при сохранении данных:', saveError);
+        
+        // Аварийное сохранение только текущего устройства
+        if (isCurrentDevice) {
+          try {
+            localStorage.setItem('emergency-device-id', deviceId);
+            localStorage.setItem('emergency-device-info', JSON.stringify(deviceInfo));
+          } catch (e) {
+            console.error('Критическая ошибка при аварийном сохранении:', e);
+          }
         }
       }
-      
-      // Принудительно проверяем, что данные сохранились правильно
-      setTimeout(() => {
-        try {
-          const checkDevices = localStorage.getItem('samga-authorized-devices');
-          if (checkDevices) {
-            const parsedDevices = JSON.parse(checkDevices);
-            console.log('Проверка сохранения - устройств в списке:', parsedDevices.length);
-          } else {
-            console.error('ОШИБКА: Список устройств не найден после сохранения!');
-          }
-        } catch (e) {
-          console.error('Ошибка при проверке сохранения:', e);
-        }
-      }, 500);
-      
     } catch (e) {
       console.warn('Критическая ошибка при сохранении устройства:', e);
     }
@@ -592,7 +601,7 @@ const NFCLogin = () => {
               <svg width="150" height="150" viewBox="0 0 58 58">
                 <path d="M4,4H12V12H4z M14,4H20V6H14z M22,4H24V10H22z M26,4H28V6H26z M30,4H38V12H30z M40,4H42V6H40z M46,4H54V12H46z
                  M4,14H6V16H4z M10,14H12V16H10z M16,14H18V20H16z M20,14H24V18H20z M26,14H28V16H26z M30,14H32V16H30z
-                 M36,14H38V16H36z M40,14H42V18H40z M44,14H46V16H44z M52,14H54V16H52z M4,18H12V26H4z M14,18H18V20H14z
+                 M36,14H38V16H36z M40,14H42V18H40z M44,14H46V16H44z M52,14H54V16H52z M4,18H6V26H4z M14,18H18V20H14z
                  M22,18H26V22H22z M30,18H32V20H30z M34,18H36V22H34z M46,18H54V26H46z M18,20H20V22H18z M28,20H30V22H28z
                  M38,20H40V26H38z M42,20H44V22H42z M14,22H16V26H14z M20,22H22V24H20z M26,22H28V24H26z M42,22H44V24H42z
                  M18,24H20V26H18z M28,24H30V26H28z M32,24H36V28H32z M40,24H42V26H40z M4,28H6V32H4z M8,28H12V30H8z
@@ -756,9 +765,26 @@ const NFCLogin = () => {
                     <p className="mt-2 text-center text-sm font-medium text-green-600">
                       Вход выполнен успешно!
                     </p>
-                    <p className="text-center text-xs text-muted-foreground">
+                    <p className="text-center text-xs text-muted-foreground mb-3">
                       Перенаправление...
                     </p>
+                    <div className="flex flex-col gap-2 w-full max-w-[200px]">
+                      <Button
+                        size="sm"
+                        onClick={() => window.location.href = '/'}
+                        className="w-full"
+                      >
+                        На главную
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => window.location.href = '/settings?section=devices'}
+                        className="w-full"
+                      >
+                        Настройки устройств
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <>

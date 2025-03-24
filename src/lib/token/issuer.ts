@@ -52,7 +52,7 @@ export const generate = async (
     ])
 
   return {
-    access: `${compressedAccessToken}::${city}`,
+    access: `${compressedAccessToken}::${refreshToken}::${city}`,
     accessExpiration: accessTokenExpiration,
     refresh: `${compressedRefreshToken}::${generatedDeviceInfo}`,
     refreshExpiration: refreshTokenExpiration,
