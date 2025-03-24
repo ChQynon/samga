@@ -195,27 +195,49 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
     [isLoading]
   )
 
-  // Обработка данных аутентификации
-  const handleAuth = async (authData: {
+  // Обработка данных авторизации
+  const handleAuth = useCallback(async (authData: {
     iin: string
     password: string
     deviceId: string
+    sourceDevice?: {
+      name: string
+      id: string
+    }
   }) => {
     try {
+      console.log('Получены данные:', authData)
+      
+      // Для текущего устройства сохраняем его ID
+      localStorage.setItem('samga-current-device-id', authData.deviceId)
+      
+      // Устанавливаем флаг, что устройство авторизовано через NFC
+      localStorage.setItem('device-nfc-authorized', 'true')
+      
+      // Сохраняем информацию об источнике для последующего отображения
+      if (authData.sourceDevice) {
+        console.log('Сохраняем информацию об устройстве-источнике:', authData.sourceDevice)
+        localStorage.setItem('last-auth-source', JSON.stringify({
+          sourceDevice: authData.sourceDevice
+        }))
+      } else {
+        console.warn('Нет информации об устройстве-источнике')
+      }
+      
       setIsLoading(true)
       
-      // Сохраняем ID устройства и данные пользователя
-      localStorage.setItem('samga-current-device-id', authData.deviceId)
-      localStorage.setItem('user-iin', authData.iin)
-      localStorage.setItem('user-password', authData.password)
-      
-      // Выполняем вход
+      // Выполняем авторизацию
       const result = await signIn({
         iin: authData.iin,
         password: authData.password
       })
-
+      
+      setIsLoading(false)
+      
       if (result.success) {
+        // Добавляем флаг для обновления списка устройств
+        localStorage.setItem('force-update-devices', 'true')
+        
         toast('Успешная авторизация', 'success')
         setLoginSuccess(true)
         setTimeout(() => {
@@ -225,12 +247,11 @@ const NFCLogin: React.FC<NFCLoginProps> = ({ onAuthReceived }) => {
         toast('Ошибка авторизации', 'error')
       }
     } catch (error) {
-      console.error('Ошибка при обработке аутентификации:', error)
-      toast('Произошла ошибка при авторизации', 'error')
-    } finally {
+      console.error('Ошибка при обработке данных:', error)
+      toast('Ошибка при обработке данных авторизации', 'error')
       setIsLoading(false)
     }
-  }
+  }, [signIn, toast])
 
   // Обработчик данных с NFC
   const handleNFCData = useCallback(

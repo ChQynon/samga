@@ -356,30 +356,27 @@ export const useDeviceAuth = (): DeviceAuthHook => {
       // Создаем временный ID для нового устройства без добавления в список
       const deviceId = uuidv4()
       
+      // Сохраняем информацию об устройстве-источнике
+      const sourceDeviceInfo = {
+        name: getBrowserInfo(),
+        id: mainDeviceId || 'unknown'
+      }
+      
       // Формируем данные для передачи
       const authData = {
         iin, 
         password,
         deviceId,
-        sourceDevice: {
-          name: getBrowserInfo(),
-          id: mainDeviceId || 'unknown'
-        }
+        sourceDevice: sourceDeviceInfo
       }
       
-      // В разработке сохраняем информацию об устройстве-источнике для демонстрации
-      if (process.env.NODE_ENV === 'development') {
-        localStorage.setItem('last-auth-source', JSON.stringify({
-          sourceDevice: {
-            name: getBrowserInfo(),
-            id: mainDeviceId || 'unknown'
-          }
-        }))
-      }
+      // Всегда сохраняем информацию об устройстве-источнике, не только в режиме разработки
+      localStorage.setItem('last-auth-source', JSON.stringify({
+        sourceDevice: sourceDeviceInfo
+      }))
       
       // Возвращаем данные в JSON формате для более надежного распознавания
-      // Это позволит QR-сканеру в NFCLogin.tsx правильно разобрать данные
-      return JSON.stringify({ iin, password, deviceId });
+      return JSON.stringify(authData);
     } catch (e) {
       console.error('Ошибка при подготовке данных для авторизации:', e)
       return ''

@@ -171,11 +171,11 @@ const DeviceAuthorization = () => {
               const devices = JSON.parse(storedDevices);
               console.log('Принудительно обновляем список устройств, найдено:', devices.length);
               
-              // Отображение устройств без повторной загрузки, если есть хотя бы одно
-              if (devices.length > 0) {
-                // Устанавливаем устройства через колбэк, чтобы избежать проблем с асинхронностью
-                setTimeout(() => window.location.reload(), 100);
-              }
+              // Больше не перезагружаем страницу автоматически!
+              // if (devices.length > 0) {
+              //   // Устанавливаем устройства через колбэк, чтобы избежать проблем с асинхронностью
+              //   setTimeout(() => window.location.reload(), 100);
+              // }
             } catch (e) {
               console.error('Ошибка при парсинге списка устройств:', e);
             }
@@ -193,9 +193,9 @@ const DeviceAuthorization = () => {
                 const hasCurrentDevice = devices.some((dev: any) => dev.id === currentId);
                 
                 if (!hasCurrentDevice) {
-                  // Если устройства нет в списке, принудительно обновляем страницу
-                  console.log('Устройство не найдено в списке, обновляем страницу');
-                  setTimeout(() => window.location.reload(), 500);
+                  // Если устройства нет в списке, добавляем его, но не перезагружаем страницу
+                  console.log('Устройство не найдено в списке, но мы не будем перезагружать страницу');
+                  // setTimeout(() => window.location.reload(), 500); - больше не делаем
                 }
               } catch (e) {
                 console.error('Ошибка при проверке списка устройств:', e);
@@ -219,8 +219,14 @@ const DeviceAuthorization = () => {
         try {
           const devices = JSON.parse(storedDevices);
           if (devices.length > 0) {
-            console.log('Обнаружены устройства в localStorage, но не в состоянии. Перезагрузка...');
-            window.location.reload();
+            console.log('Обнаружены устройства в localStorage, но не в состоянии');
+            // Перезагружаем страницу только при первом запуске
+            if (!localStorage.getItem('initial-load-complete')) {
+              console.log('Первая загрузка, обновляем страницу');
+              localStorage.setItem('initial-load-complete', 'true');
+              // Используем setTimeout, чтобы избежать бесконечного цикла
+              setTimeout(() => window.location.reload(), 500);
+            }
           }
         } catch (e) {
           console.error('Ошибка при проверке устройств в localStorage:', e);
@@ -396,6 +402,32 @@ const DeviceAuthorization = () => {
             Это устройство было подключено через другое устройство и имеет ограниченный доступ.
             С этого устройства нельзя авторизовать другие устройства.
           </p>
+          
+          {/* Информация об устройстве-источнике */}
+          {(() => {
+            try {
+              if (typeof window !== 'undefined') {
+                const authSourceData = localStorage.getItem('last-auth-source');
+                if (authSourceData) {
+                  const sourceData = JSON.parse(authSourceData);
+                  if (sourceData.sourceDevice && sourceData.sourceDevice.name) {
+                    return (
+                      <div className="mt-2 pt-2 border-t border-blue-100">
+                        <p className="flex items-center gap-1 text-xs">
+                          <span>Авторизовано через:</span>
+                          <span className="font-medium">{sourceData.sourceDevice.name}</span>
+                        </p>
+                      </div>
+                    );
+                  }
+                }
+              }
+              return null;
+            } catch (e) {
+              console.error('Ошибка при чтении информации об устройстве-источнике:', e);
+              return null;
+            }
+          })()}
         </div>
       )}
       
