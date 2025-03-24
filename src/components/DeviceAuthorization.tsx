@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { useDeviceAuth } from '@/lib/hooks/useDeviceAuth'
 import { DeviceInfo } from '@/lib/hooks/useNFC'
@@ -21,7 +21,7 @@ import {
   DialogHeader, 
   DialogTitle 
 } from '@/components/ui/dialog'
-import { Spinner, Trash, PhoneSlash, QrCode, CheckCircle, Warning, X } from '@phosphor-icons/react'
+import { Spinner, Trash, PhoneSlash, QrCode, CheckCircle, Warning, X, ArrowsClockwise } from '@phosphor-icons/react'
 import { Phone as Smartphone } from '@phosphor-icons/react'
 import { useToast } from '@/lib/providers/ToastProvider'
 import { QRCodeSVG } from 'qrcode.react'
@@ -240,7 +240,7 @@ const DeviceAuthorization = () => {
   // Загружаем список устройств из localStorage
   useEffect(() => {
     const loadDevicesFromLocalStorage = () => {
-      console.log('Принудительная загрузка устройств из localStorage');
+      console.log('Проверка устройств в localStorage');
       
       try {
         // Получаем сохраненные устройства
@@ -256,10 +256,13 @@ const DeviceAuthorization = () => {
           return;
         }
         
-        console.log('Загружено устройств из localStorage:', devices.length);
+        console.log('Устройств в localStorage:', devices.length, 'в состоянии:', authorizedDevices.length);
         
-        // Вручную обновляем authorizedDevices с помощью хука useDeviceAuth
-        if (devices.length > 0 && authorizedDevices.length === 0) {
+        // Перезагружаем страницу ТОЛЬКО при первой загрузке и только один раз
+        // Используем дополнительный флаг, чтобы избежать зацикливания
+        if (devices.length > 0 && authorizedDevices.length === 0 && !localStorage.getItem('reload-attempted')) {
+          console.log('Первая загрузка, обновляем страницу один раз');
+          localStorage.setItem('reload-attempted', 'true');
           window.location.reload();
         }
       } catch (e) {
@@ -270,11 +273,33 @@ const DeviceAuthorization = () => {
     // Загружаем устройства при монтировании компонента
     loadDevicesFromLocalStorage();
     
-    // Загружаем каждые 5 секунд для синхронизации
-    const interval = setInterval(loadDevicesFromLocalStorage, 5000);
+    // Проверяем только один раз при монтировании и НЕ используем интервал
+    // Убираем интервал, чтобы избежать постоянного обновления
     
-    return () => clearInterval(interval);
+    // Очищаем флаг reload-attempted при размонтировании
+    return () => {
+      // Удаляем флаг через 10 секунд, чтобы дать время для загрузки данных
+      setTimeout(() => {
+        localStorage.removeItem('reload-attempted');
+      }, 10000);
+    };
   }, [authorizedDevices.length]);
+  
+  // Проверяем изменения в localStorage по требованию, но не запускаем автообновление
+  const manualRefresh = useCallback(() => {
+    console.log('Ручное обновление списка устройств');
+    
+    // Определяем количество перезагрузок
+    const reloadCount = parseInt(sessionStorage.getItem('page-reloads') || '0');
+    
+    // Ограничиваем количество перезагрузок до 2 за сессию
+    if (reloadCount < 2) {
+      sessionStorage.setItem('page-reloads', (reloadCount + 1).toString());
+      window.location.reload();
+    } else {
+      showToast('Обновление списка устройств будет доступно при следующем входе', 'info');
+    }
+  }, [showToast]);
   
   // Начать процесс авторизации (общий метод)
   const handleStartAuth = async () => {
@@ -417,6 +442,9 @@ const DeviceAuthorization = () => {
     setSelectedDeviceId(null)
   }
   
+  // Константа для стиля карточки устройства
+  const deviceCardClass = "relative flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-md shadow-sm gap-2";
+  
   return (
     <div className="space-y-6">
       <div className="flex flex-col space-y-2">
@@ -518,29 +546,42 @@ const DeviceAuthorization = () => {
         </div>
       </div>
       
-      {/* Список устройств */}
-      <div className="space-y-2 mt-3">
+      {/* Кнопка обновления данных */}
+      <div className="flex justify-end mt-4">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="text-xs flex items-center gap-1"
+          onClick={manualRefresh}
+        >
+          <ArrowsClockwise size={14} />
+          Обновить список
+        </Button>
+      </div>
+      
+      {/* Список устройств - улучшенная адаптивная верстка */}
+      <div className="space-y-3 mt-3">
         {formattedDevices.length > 0 ? (
           formattedDevices.map((device) => (
             <div
               key={device.id}
               className={cn(
-                "relative flex items-center justify-between p-3 rounded-md shadow-sm",
+                deviceCardClass,
                 device.isCurrent ? "bg-primary/10 border border-primary/30" : "bg-muted"
               )}
             >
-              <div className="flex items-center space-x-3">
+              <div className="flex-1 flex items-center space-x-3 min-w-0">
                 {device.isCurrent && (
                   <div className="absolute -left-1 -top-1 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
                     <span className="text-[10px] font-bold">ВЫ</span>
                   </div>
                 )}
-                <div className="p-2 rounded-full bg-background">
+                <div className="flex-shrink-0 p-2 rounded-full bg-background">
                   <Smartphone size={24} />
                 </div>
-                <div>
-                  <p className="text-sm font-medium">{device.name}</p>
-                  <p className="text-xs text-muted-foreground">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{device.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">
                     {device.isCurrent 
                       ? "Текущее устройство" 
                       : `Подключено: ${device.formattedTime || device.lastAccess || 'неизвестно'}`
@@ -558,7 +599,7 @@ const DeviceAuthorization = () => {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-destructive self-center"
                 onClick={() => handleRequestRevoke(device.id)}
                 disabled={device.isCurrent}
               >
