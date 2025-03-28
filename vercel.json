@@ -1,20 +1,12 @@
 {
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/next",
-      "config": {
-        "installCommand": "pnpm install --no-frozen-lockfile",
-        "eslint": {
-          "ignoreDuringBuilds": true
-        },
-        "typescript": {
-          "ignoreBuildErrors": true
-        }
-      }
-    }
-  ],
   "env": {
-    "RUNTIME": "nodejs"
-  }
+    "RUNTIME": "edge",
+    "NEXT_PUBLIC_CONTACT_LINK": "https://t.me/chqynon",
+    "NEXT_PUBLIC_REPO_LINK": "https://github.com/ChQynon/samga",
+    "NEXT_PUBLIC_DONATE_LINK": "https://kaspi.kz/pay/chqynon"
+  },
+  "buildCommand": "pnpm run build",
+  "outputDirectory": ".next",
+  "framework": "nextjs",
+  "regions": ["iad1"]
 } 
