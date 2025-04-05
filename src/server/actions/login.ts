@@ -15,6 +15,7 @@ type LoginActionType = {
   errors?: {
     iin?: string
     password?: string
+    general?: string  // добавляем общий тип ошибки
   }
   success: boolean
 }
@@ -47,7 +48,7 @@ export async function login(iin: string, password: string): Promise<LoginActionT
     return { 
       success: false, 
       errors: { 
-        auth: 'Ошибка аутентификации'
+        general: 'Ошибка аутентификации'
       } 
     }
   }

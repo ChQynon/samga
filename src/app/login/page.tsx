@@ -1,4 +1,4 @@
-'use client'
+'use server'
 
 import React from 'react'
 import { redirect } from 'next/navigation'
@@ -9,42 +9,12 @@ import Logo from '@/components/misc/Logo'
 import NFCLogin from '@/components/NFCLogin'
 import QRLogin from '@/components/QRLogin'
 import { env } from '@/env'
-import { useRouter } from 'next-nprogress-bar'
-import { useToast } from '@/lib/providers/ToastProvider'
-import { login } from '@/server/actions/login'
 
 export default async function LoginPage() {
   const token = cookies().get('user_token')
   
   if (token && await getVerified()) {
     redirect('/dash')
-  }
-  
-  const router = useRouter()
-  const { showToast } = useToast()
-  
-  // Обработчик получения данных аутентификации через NFC
-  const handleAuthReceived = async (iin: string, password: string, deviceId: string) => {
-    // Сохраняем ID устройства и учетные данные
-    try {
-      localStorage.setItem('samga-current-device-id', deviceId || `device-${Date.now()}`)
-      localStorage.setItem('user-iin', iin)
-      localStorage.setItem('user-password', password)
-      
-      showToast('Выполняется вход...', 'info')
-      
-      // Выполняем вход
-      const result = await login(iin, password)
-      if (result.success) {
-        showToast('Вход выполнен успешно через NFC', 'success')
-        router.push('/')
-      } else {
-        showToast('Ошибка при входе: неверные данные аутентификации', 'error')
-      }
-    } catch (e) {
-      console.error('Ошибка при обработке аутентификации через NFC:', e)
-      showToast('Не удалось выполнить вход', 'error')
-    }
   }
   
   return (
@@ -76,7 +46,7 @@ export default async function LoginPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <QRLogin />
-            <NFCLogin onAuthReceived={handleAuthReceived} />
+            <NFCLogin />
           </div>
         </div>
         

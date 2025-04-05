@@ -1,3 +1,5 @@
+'use client'
+
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -28,7 +30,12 @@ export default function LoginForm() {
       if (result.success) {
         router.push('/dash')
       } else {
-        const errorMessage = result.errors?.auth || 'Ошибка при входе'
+        let errorMessage = 'Ошибка при входе'
+        if (result.errors) {
+          if (result.errors.iin) errorMessage = result.errors.iin
+          else if (result.errors.password) errorMessage = result.errors.password
+          else if (result.errors.general) errorMessage = result.errors.general
+        }
         setError(errorMessage)
       }
     } catch (err) {
