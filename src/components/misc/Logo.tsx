@@ -1,31 +1,37 @@
-import React, { FC } from 'react'
-import { cn } from '@/lib/utils'
+import React from 'react'
+import Image from 'next/image'
+import Link from 'next/link'
 
-const Logo: FC<{ width?: number; height?: number; className?: string; withText?: boolean }> = ({
-  width = 38,
-  height = 42,
-  className = 'mb-3 ml-px mt-2',
-  withText = false,
-}) => {
-  return (
-    <div className="flex items-center">
-      <svg
-        width={width}
-        height={height}
-        viewBox="0 0 38 42"
-        xmlns="http://www.w3.org/2000/svg"
-        className={cn(className, 'fill-primary')}
-      >
-        <path d="M19 0L0 10.5V31.5L19 42L38 31.5V10.5L19 0ZM30.4 26.25L19 32.55L7.6 26.25V15.75L19 9.45L30.4 15.75V26.25ZM19 23.1L24.7 19.95V13.65L19 10.5L13.3 13.65V19.95L19 23.1Z" />
-      </svg>
-      {withText && (
-        <div className="ml-2 flex flex-col">
-          <span className="text-xl font-bold text-primary">samga.nis</span>
-          <span className="text-xs text-muted-foreground">Взлетай к знаниям!</span>
-        </div>
-      )}
-    </div>
-  )
+interface LogoProps {
+  width?: number
+  height?: number
+  className?: string
+  withText?: boolean
 }
 
-export default Logo
+export default function Logo({ 
+  width = 40, 
+  height = 40, 
+  className = '',
+  withText = false 
+}: LogoProps) {
+  return (
+    <Link href="/" className={`inline-flex items-center ${className}`}>
+      <div className="relative" style={{ width, height }}>
+        <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" width={width} height={height}>
+          <path d="M50 100C77.6142 100 100 77.6142 100 50C100 22.3858 77.6142 0 50 0C22.3858 0 0 22.3858 0 50C0 77.6142 22.3858 100 50 100Z" fill="#1E9DE3"/>
+          <path d="M32.5 30L50 40V80L32.5 70V30Z" fill="white"/>
+          <path d="M67.5 30L50 40V80L67.5 70V30Z" fill="white"/>
+          <path d="M50 20L32.5 30L50 40L67.5 30L50 20Z" fill="white"/>
+        </svg>
+      </div>
+      
+      {withText && (
+        <div className="ml-2 flex flex-col">
+          <span className="text-[#1E9DE3] font-bold text-lg leading-none">samga</span>
+          <span className="text-gray-600 text-xs">.nis</span>
+        </div>
+      )}
+    </Link>
+  )
+}
